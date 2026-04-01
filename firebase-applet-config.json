@@ -1,10 +1,10 @@
 {
-  "projectId": "remixed-project-id",
-  "appId": "remixed-app-id",
-  "apiKey": "remixed-api-key",
-  "authDomain": "remixed-auth-domain",
-  "firestoreDatabaseId": "remixed-firestore-database-id",
-  "storageBucket": "remixed-storage-bucket",
-  "messagingSenderId": "remixed-messaging-sender-id",
-  "measurementId": "remixed-measurement-id"
+  "projectId": "janudsfurniture",
+  "appId": "1:819842958849:web:0afb6210b80a112c44e200",
+  "apiKey": "AIzaSyBSdPXN70gEqPQan0_oVoXiTGa4if7swD8",
+  "authDomain": "janudsfurniture.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-2f6eb6fc-b290-462e-bb7e-0f99b37ec330",
+  "storageBucket": "janudsfurniture.firebasestorage.app",
+  "messagingSenderId": "819842958849",
+  "measurementId": ""
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, where, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { Quotation } from '../types';
 import { Link } from 'react-router-dom';
 import { FileText, Plus, Trash2 } from 'lucide-react';
@@ -12,18 +13,19 @@ export default function QuotationList() {
 
   const confirmDelete = async () => {
     if (!deleteId) return;
+    const path = `quotations/${deleteId}`;
     try {
       await deleteDoc(doc(db, 'quotations', deleteId));
       setDeleteId(null);
     } catch (error) {
-      console.error("Error deleting quotation:", error);
-      alert("Failed to delete quotation.");
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   };
 
   useEffect(() => {
     if (!auth.currentUser) return;
 
+    const path = 'quotations';
     const q = query(collection(db, 'quotations'), where('userId', '==', auth.currentUser.uid));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const quotes: Quotation[] = [];
@@ -35,8 +37,7 @@ export default function QuotationList() {
       setQuotations(quotes);
       setLoading(false);
     }, (error) => {
-      console.error("Error fetching quotations:", error);
-      setLoading(false);
+      handleFirestoreError(error, OperationType.LIST, path);
     });
 
     return () => unsubscribe();

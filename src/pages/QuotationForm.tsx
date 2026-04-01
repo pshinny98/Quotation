@@ -3,6 +3,7 @@ import { ArrowLeft, Image as ImageIcon, X, PlusCircle, Save, Trash2 } from 'luci
 import { useNavigate, useParams } from 'react-router-dom';
 import { collection, doc, setDoc, getDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { ProductItem, SubItem } from '../types';
 
 // Auto-expanding textarea component
@@ -36,13 +37,13 @@ export default function QuotationForm() {
 
   const confirmDelete = async () => {
     if (!id) return;
+    const path = `quotations/${id}`;
     try {
       await deleteDoc(doc(db, 'quotations', id));
       setShowDeleteModal(false);
       navigate('/quotations');
     } catch (error) {
-      console.error("Error deleting quotation:", error);
-      alert("Failed to delete quotation.");
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   };
 
@@ -81,6 +82,7 @@ export default function QuotationForm() {
     if (id) {
       // Load existing quotation
       const loadQuotation = async () => {
+        const path = `quotations/${id}`;
         try {
           const docRef = doc(db, 'quotations', id);
           const docSnap = await getDoc(docRef);
@@ -93,7 +95,7 @@ export default function QuotationForm() {
             setQuoteRef(data.quoteRef || '');
           }
         } catch (error) {
-          console.error("Error loading quotation:", error);
+          handleFirestoreError(error, OperationType.GET, path);
         }
       };
       loadQuotation();
@@ -167,18 +169,34 @@ export default function QuotationForm() {
       let quoteId = id;
 
       if (id) {
-        await setDoc(doc(db, 'quotations', id), quotationData, { merge: true });
+        const path = `quotations/${id}`;
+        try {
+          await setDoc(doc(db, 'quotations', id), quotationData, { merge: true });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, path);
+        }
       } else {
-        const newDoc = await addDoc(collection(db, 'quotations'), {
-          ...quotationData,
-          createdAt: Date.now()
-        });
-        quoteId = newDoc.id;
+        const path = 'quotations';
+        try {
+          const newDoc = await addDoc(collection(db, 'quotations'), {
+            ...quotationData,
+            createdAt: Date.now()
+          });
+          quoteId = newDoc.id;
+        } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, path);
+        }
       }
 
       // Update Customer Profile
+      const customerPath = `customers/${customer.name.toLowerCase().replace(/\s+/g, '-')}`;
       const customerRef = doc(db, 'customers', customer.name.toLowerCase().replace(/\s+/g, '-'));
-      const customerSnap = await getDoc(customerRef);
+      let customerSnap;
+      try {
+        customerSnap = await getDoc(customerRef);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, customerPath);
+      }
       
       // Extract unique product groups (descriptions)
       const productGroups = Array.from(new Set(items.map(i => i.desc).filter(Boolean)));
@@ -186,24 +204,32 @@ export default function QuotationForm() {
       if (customerSnap.exists()) {
         const existingData = customerSnap.data();
         const updatedGroups = Array.from(new Set([...(existingData.productGroups || []), ...productGroups]));
-        await setDoc(customerRef, {
-          ...customer,
-          userId: auth.currentUser.uid,
-          latestQuoteRef: quoteRef,
-          latestQuoteDate: quoteDate,
-          productGroups: updatedGroups,
-          updatedAt: Date.now()
-        }, { merge: true });
+        try {
+          await setDoc(customerRef, {
+            ...customer,
+            userId: auth.currentUser.uid,
+            latestQuoteRef: quoteRef,
+            latestQuoteDate: quoteDate,
+            productGroups: updatedGroups,
+            updatedAt: Date.now()
+          }, { merge: true });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, customerPath);
+        }
       } else {
-        await setDoc(customerRef, {
-          ...customer,
-          userId: auth.currentUser.uid,
-          latestQuoteRef: quoteRef,
-          latestQuoteDate: quoteDate,
-          productGroups,
-          createdAt: Date.now(),
-          updatedAt: Date.now()
-        });
+        try {
+          await setDoc(customerRef, {
+            ...customer,
+            userId: auth.currentUser.uid,
+            latestQuoteRef: quoteRef,
+            latestQuoteDate: quoteDate,
+            productGroups,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, customerPath);
+        }
       }
 
       // Update Product Library
@@ -211,20 +237,25 @@ export default function QuotationForm() {
         for (const subItem of product.subItems) {
           if (subItem.itemName || product.desc) {
             const productKey = `${product.desc}-${subItem.itemName}`.toLowerCase().replace(/[^a-z0-9]/g, '-');
+            const productPath = `products/${productKey}`;
             const productRef = doc(db, 'products', productKey);
-            await setDoc(productRef, {
-              image: product.image || '',
-              desc: product.desc || '',
-              itemName: subItem.itemName || '',
-              sizeW: subItem.sizeW || 0,
-              sizeD: subItem.sizeD || 0,
-              sizeH: subItem.sizeH || 0,
-              price: subItem.price || 0,
-              vol: ((subItem.sizeW * subItem.sizeD * subItem.sizeH) / 1000000) || 0,
-              userId: auth.currentUser.uid,
-              latestQuoteRef: quoteRef,
-              updatedAt: Date.now()
-            }, { merge: true });
+            try {
+              await setDoc(productRef, {
+                image: product.image || '',
+                desc: product.desc || '',
+                itemName: subItem.itemName || '',
+                sizeW: subItem.sizeW || 0,
+                sizeD: subItem.sizeD || 0,
+                sizeH: subItem.sizeH || 0,
+                price: subItem.price || 0,
+                vol: ((subItem.sizeW * subItem.sizeD * subItem.sizeH) / 1000000) || 0,
+                userId: auth.currentUser.uid,
+                latestQuoteRef: quoteRef,
+                updatedAt: Date.now()
+              }, { merge: true });
+            } catch (error) {
+              handleFirestoreError(error, OperationType.WRITE, productPath);
+            }
           }
         }
       }
@@ -235,7 +266,11 @@ export default function QuotationForm() {
       }
     } catch (error) {
       console.error("Error saving quotation:", error);
-      alert("Failed to save quotation.");
+      if (!(error instanceof Error && error.message.startsWith('{'))) {
+        alert("Failed to save quotation.");
+      } else {
+        throw error; // Let ErrorBoundary handle it
+      }
     } finally {
       setIsSaving(false);
     }

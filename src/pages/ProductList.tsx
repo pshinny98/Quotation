@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { Product } from '../types';
 import { Package, Image as ImageIcon } from 'lucide-react';
 
@@ -11,6 +12,7 @@ export default function ProductList() {
   useEffect(() => {
     if (!auth.currentUser) return;
 
+    const path = 'products';
     const q = query(collection(db, 'products'), where('userId', '==', auth.currentUser.uid));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const prods: Product[] = [];
@@ -22,8 +24,7 @@ export default function ProductList() {
       setProducts(prods);
       setLoading(false);
     }, (error) => {
-      console.error("Error fetching products:", error);
-      setLoading(false);
+      handleFirestoreError(error, OperationType.LIST, path);
     });
 
     return () => unsubscribe();

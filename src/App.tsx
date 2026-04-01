@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { auth } from './firebase';
 import Layout from './components/Layout';
+import ErrorBoundary from './components/ErrorBoundary';
 import QuotationForm from './pages/QuotationForm';
 import QuotationList from './pages/QuotationList';
 import CustomerList from './pages/CustomerList';
@@ -60,17 +61,19 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<QuotationForm />} />
-          <Route path="/quotations" element={<QuotationList />} />
-          <Route path="/quotations/:id" element={<QuotationForm />} />
-          <Route path="/customers" element={<CustomerList />} />
-          <Route path="/products" element={<ProductList />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Layout>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<QuotationForm />} />
+            <Route path="/quotations" element={<QuotationList />} />
+            <Route path="/quotations/:id" element={<QuotationForm />} />
+            <Route path="/customers" element={<CustomerList />} />
+            <Route path="/products" element={<ProductList />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Layout>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

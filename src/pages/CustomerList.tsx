@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { Customer, Quotation } from '../types';
 import { Link } from 'react-router-dom';
 import { Users, FileText } from 'lucide-react';
@@ -13,6 +14,7 @@ export default function CustomerList() {
   useEffect(() => {
     if (!auth.currentUser) return;
 
+    const customersPath = 'customers';
     const qCustomers = query(collection(db, 'customers'), where('userId', '==', auth.currentUser.uid));
     const unsubCustomers = onSnapshot(qCustomers, (snapshot) => {
       const custs: Customer[] = [];
@@ -20,8 +22,11 @@ export default function CustomerList() {
         custs.push({ id: doc.id, ...doc.data() } as Customer);
       });
       setCustomers(custs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, customersPath);
     });
 
+    const quotationsPath = 'quotations';
     const qQuotes = query(collection(db, 'quotations'), where('userId', '==', auth.currentUser.uid));
     const unsubQuotes = onSnapshot(qQuotes, (snapshot) => {
       const quotes: Quotation[] = [];
@@ -30,6 +35,8 @@ export default function CustomerList() {
       });
       setQuotations(quotes);
       setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, quotationsPath);
     });
 
     return () => {
