@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #002a58;
+  --color-primary-container: #004080;
+  --color-on-primary: #ffffff;
+  --color-background: #fcf9f8;
+  --color-on-background: #1b1c1c;
+  --color-surface: #fcf9f8;
+  --color-on-surface: #1b1c1c;
+  --color-surface-variant: #e5e2e1;
+  --color-on-surface-variant: #424750;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f6f3f2;
+  --color-surface-container: #f0eded;
+  --color-secondary-container: #d8e4f1;
+  --color-on-secondary-container: #5a6671;
+  --color-outline: #737781;
+  --color-outline-variant: #c3c6d2;
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+  
+  --font-headline: "Inter", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-label: "Inter", sans-serif;
+}
+
+/* Auto-expanding textarea utility */
+.auto-expand {
+  overflow: hidden;
+  resize: none;
+  min-height: 1.5rem;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+  
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background-color: white;
+  }
+
+  header, .print-hidden {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+  }
+
+  .print-scale {
+    zoom: 0.74;
+    width: 960px !important;
+    max-width: 960px !important;
+    box-shadow: none !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+  }
+
+  .print-grid {
+    grid-template-columns: 100px 1fr 80px 25px 20px 20px 40px 40px 65px 65px !important;
+  }
+  .print-grid-subitem {
+    grid-template-columns: 80px 25px 20px 20px 40px 40px 65px 65px !important;
+  }
+}

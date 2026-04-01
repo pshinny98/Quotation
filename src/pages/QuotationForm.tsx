@@ -1,0 +1,641 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { ArrowLeft, Image as ImageIcon, X, PlusCircle, Save, Trash2 } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { collection, doc, setDoc, getDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '../firebase';
+import { ProductItem, SubItem } from '../types';
+
+// Auto-expanding textarea component
+const AutoTextarea = ({ value, onChange, placeholder, className }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, placeholder?: string, className?: string }) => {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.style.height = 'auto';
+      ref.current.style.height = ref.current.scrollHeight + 'px';
+    }
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      className={`auto-expand bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full p-0 text-center leading-normal transition-colors ${className}`}
+      rows={1}
+    />
+  );
+};
+
+export default function QuotationForm() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [isSaving, setIsSaving] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  const confirmDelete = async () => {
+    if (!id) return;
+    try {
+      await deleteDoc(doc(db, 'quotations', id));
+      setShowDeleteModal(false);
+      navigate('/quotations');
+    } catch (error) {
+      console.error("Error deleting quotation:", error);
+      alert("Failed to delete quotation.");
+    }
+  };
+
+  const [items, setItems] = useState<ProductItem[]>([
+    { 
+      id: 1, image: '', desc: 'Solid Wood Frame + High Density Sponge + Velvet/Fabric/Leather', 
+      subItems: [{ id: 11, itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 2, vol: 1.5, price: 850 }] 
+    },
+    { 
+      id: 2, image: '', desc: 'Solid Oak Dining Table', 
+      subItems: [{ id: 21, itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 1, vol: 0.8, price: 600 }] 
+    },
+    { 
+      id: 3, image: '', desc: 'Solid Wood Frame + High Density Sponge + Velvet/Fabric/Leather', 
+      subItems: [{ id: 31, itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 6, vol: 0.15, price: 120 }] 
+    },
+    { 
+      id: 4, image: '', desc: 'Round Walnut Coffee Table', 
+      subItems: [{ id: 41, itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 1, vol: 0.4, price: 350 }] 
+    },
+  ]);
+
+  const [seaFreight, setSeaFreight] = useState<string>('450');
+  
+  const [customer, setCustomer] = useState({
+    name: '',
+    email: '',
+    tel: '',
+    address: ''
+  });
+
+  const [quoteDate, setQuoteDate] = useState('');
+  const [quoteRef, setQuoteRef] = useState('');
+
+  useEffect(() => {
+    if (id) {
+      // Load existing quotation
+      const loadQuotation = async () => {
+        try {
+          const docRef = doc(db, 'quotations', id);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setItems(data.items || []);
+            setCustomer(data.customer || { name: '', email: '', tel: '', address: '' });
+            setSeaFreight(data.seaFreight || '0');
+            setQuoteDate(data.quoteDate || '');
+            setQuoteRef(data.quoteRef || '');
+          }
+        } catch (error) {
+          console.error("Error loading quotation:", error);
+        }
+      };
+      loadQuotation();
+    } else {
+      // New quotation
+      const today = new Date();
+      const formattedDate = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(today);
+      setQuoteDate(formattedDate);
+
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const dateString = `${yyyy}${mm}${dd}`;
+
+      const storageKey = `quote_seq_${dateString}`;
+      const currentSeq = parseInt(localStorage.getItem(storageKey) || '1', 10);
+
+      setQuoteRef(`JF${dateString}${currentSeq}`);
+    }
+  }, [id]);
+
+  const handleExportPDF = () => {
+    window.print();
+
+    if (!id) {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const dateString = `${yyyy}${mm}${dd}`;
+      
+      const storageKey = `quote_seq_${dateString}`;
+      const currentSeq = parseInt(localStorage.getItem(storageKey) || '1', 10);
+      const nextSeq = currentSeq + 1;
+      localStorage.setItem(storageKey, nextSeq.toString());
+      
+      setQuoteRef(`JF${dateString}${nextSeq}`);
+    }
+  };
+
+  const subtotal = items.reduce((sum, product) => sum + product.subItems.reduce((subSum, sub) => subSum + (sub.qty * sub.price), 0), 0);
+  const totalVolume = items.reduce((sum, product) => sum + product.subItems.reduce((subSum, sub) => subSum + ((sub.sizeW * sub.sizeD * sub.sizeH * sub.qty) / 1000000), 0), 0);
+  const grandTotal = subtotal + (Number(seaFreight) || 0);
+
+  const handleSave = async () => {
+    if (!auth.currentUser) {
+      alert("Please log in to save.");
+      return;
+    }
+    
+    if (!customer.name) {
+      alert("Please enter a customer name.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const quotationData = {
+        quoteRef,
+        quoteDate,
+        customer,
+        items,
+        seaFreight,
+        subtotal,
+        totalVolume,
+        grandTotal,
+        userId: auth.currentUser.uid,
+        updatedAt: Date.now()
+      };
+
+      let quoteId = id;
+
+      if (id) {
+        await setDoc(doc(db, 'quotations', id), quotationData, { merge: true });
+      } else {
+        const newDoc = await addDoc(collection(db, 'quotations'), {
+          ...quotationData,
+          createdAt: Date.now()
+        });
+        quoteId = newDoc.id;
+      }
+
+      // Update Customer Profile
+      const customerRef = doc(db, 'customers', customer.name.toLowerCase().replace(/\s+/g, '-'));
+      const customerSnap = await getDoc(customerRef);
+      
+      // Extract unique product groups (descriptions)
+      const productGroups = Array.from(new Set(items.map(i => i.desc).filter(Boolean)));
+
+      if (customerSnap.exists()) {
+        const existingData = customerSnap.data();
+        const updatedGroups = Array.from(new Set([...(existingData.productGroups || []), ...productGroups]));
+        await setDoc(customerRef, {
+          ...customer,
+          userId: auth.currentUser.uid,
+          latestQuoteRef: quoteRef,
+          latestQuoteDate: quoteDate,
+          productGroups: updatedGroups,
+          updatedAt: Date.now()
+        }, { merge: true });
+      } else {
+        await setDoc(customerRef, {
+          ...customer,
+          userId: auth.currentUser.uid,
+          latestQuoteRef: quoteRef,
+          latestQuoteDate: quoteDate,
+          productGroups,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        });
+      }
+
+      // Update Product Library
+      for (const product of items) {
+        for (const subItem of product.subItems) {
+          if (subItem.itemName || product.desc) {
+            const productKey = `${product.desc}-${subItem.itemName}`.toLowerCase().replace(/[^a-z0-9]/g, '-');
+            const productRef = doc(db, 'products', productKey);
+            await setDoc(productRef, {
+              image: product.image || '',
+              desc: product.desc || '',
+              itemName: subItem.itemName || '',
+              sizeW: subItem.sizeW || 0,
+              sizeD: subItem.sizeD || 0,
+              sizeH: subItem.sizeH || 0,
+              price: subItem.price || 0,
+              vol: ((subItem.sizeW * subItem.sizeD * subItem.sizeH) / 1000000) || 0,
+              userId: auth.currentUser.uid,
+              latestQuoteRef: quoteRef,
+              updatedAt: Date.now()
+            }, { merge: true });
+          }
+        }
+      }
+
+      alert("Quotation saved successfully!");
+      if (!id) {
+        navigate(`/quotations/${quoteId}`);
+      }
+    } catch (error) {
+      console.error("Error saving quotation:", error);
+      alert("Failed to save quotation.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const updateProduct = (id: number, field: string, value: string | number) => {
+    setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
+  };
+
+  const updateSubItem = (productId: number, subItemId: number, field: string, value: string | number) => {
+    setItems(items.map(p => {
+      if (p.id === productId) {
+        return {
+          ...p,
+          subItems: p.subItems.map(s => s.id === subItemId ? { ...s, [field]: value } : s)
+        };
+      }
+      return p;
+    }));
+  };
+
+  const handleImageUpload = (id: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        updateProduct(id, 'image', reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeProduct = (id: number) => {
+    setItems(items.filter(item => item.id !== id));
+  };
+
+  const removeSubItem = (productId: number, subItemId: number) => {
+    setItems(items.map(p => {
+      if (p.id === productId) {
+        return { ...p, subItems: p.subItems.filter(s => s.id !== subItemId) };
+      }
+      return p;
+    }).filter(p => p.subItems.length > 0));
+  };
+
+  const addProduct = () => {
+    const newId = items.length > 0 ? Math.max(...items.map(i => i.id)) + 1 : 1;
+    setItems([...items, { id: newId, image: '', desc: '', subItems: [{ id: Date.now(), itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 1, vol: 0, price: 0 }] }]);
+  };
+
+  const addSubItem = (productId: number) => {
+    setItems(items.map(p => {
+      if (p.id === productId) {
+        return {
+          ...p,
+          subItems: [...p.subItems, { id: Date.now(), itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 1, vol: 0, price: 0 }]
+        };
+      }
+      return p;
+    }));
+  };
+
+  const formatNumber = (value: number) => {
+    return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0 }).format(value);
+  };
+
+  return (
+    <div className="min-h-screen bg-background text-on-background font-body antialiased flex flex-col">
+      <header className="sticky top-0 z-10 flex items-center justify-between px-6 sm:px-10 py-4 bg-surface-container-lowest/80 backdrop-blur-md shadow-[0_4px_24px_rgba(0,42,88,0.04)] print:hidden">
+        <div className="flex items-center gap-4 text-on-surface">
+          <button onClick={() => navigate(-1)} aria-label="Go back" className="p-2 rounded-full hover:bg-surface-container-low transition-colors">
+            <ArrowLeft size={24} />
+          </button>
+          <h2 className="text-xl font-headline font-bold tracking-tight">Quotation Preview</h2>
+        </div>
+        <div className="flex items-center gap-4">
+          {id && (
+            <button 
+              onClick={() => setShowDeleteModal(true)}
+              className="h-10 px-4 rounded-md text-error hover:bg-error-container/50 transition-colors flex items-center gap-2 font-medium"
+            >
+              <Trash2 size={18} />
+              <span className="hidden sm:inline">Delete</span>
+            </button>
+          )}
+          <button 
+            onClick={handleSave}
+            disabled={isSaving}
+            className="h-10 px-6 rounded-md bg-secondary-container text-on-secondary-container text-sm font-label font-bold tracking-wide shadow-sm hover:opacity-90 transition-opacity flex items-center gap-2"
+          >
+            <Save size={18} />
+            {isSaving ? 'Saving...' : 'Save'}
+          </button>
+          <button 
+            onClick={handleExportPDF}
+            className="h-10 px-6 rounded-md bg-gradient-to-br from-primary to-primary-container text-on-primary text-sm font-label font-bold tracking-wide shadow-sm hover:opacity-90 transition-opacity"
+          >
+            Export PDF
+          </button>
+        </div>
+      </header>
+
+      <main className="flex-grow flex flex-col items-center py-10 px-4 sm:px-8">
+        <div className="w-full max-w-[960px] bg-surface-container-lowest shadow-[0_4px_24px_rgba(0,42,88,0.04)] p-6 sm:p-12 flex flex-col gap-6 print-scale">
+          {/* Print Header Spacer */}
+          <div className="hidden print:block h-16 w-full"></div>
+          
+          {/* Company Info */}
+          <div className="flex flex-col gap-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+              <div>
+                <h1 className="text-primary text-2xl sm:text-3xl font-headline font-bold tracking-tight mb-1">Shenzhen Janus Furniture Co., Ltd</h1>
+                <p className="text-on-surface-variant font-label uppercase tracking-widest mt-2 font-bold text-lg">Quotation</p>
+              </div>
+              <div className="text-left sm:text-right flex flex-col gap-1 text-on-surface-variant text-sm">
+                <p>Date: <span className="text-on-surface font-medium">{quoteDate}</span></p>
+                <p>Quote Ref: <span className="text-on-surface font-medium">{quoteRef}</span></p>
+              </div>
+            </div>
+
+            <div className="bg-surface-container-low p-6 rounded-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1.5fr_1.2fr_1fr_1.2fr] print:grid-cols-[1.5fr_1.2fr_1fr_1.2fr] gap-6">
+              <div className="flex flex-col gap-1">
+                <span className="text-on-surface-variant text-xs font-label tracking-wider">Website</span>
+                <span className="text-on-surface text-sm font-medium whitespace-nowrap">https://szjanus.en.alibaba.com</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-on-surface-variant text-xs font-label tracking-wider">Email</span>
+                <span className="text-on-surface text-sm font-medium whitespace-nowrap">info@janusfurniture.com</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-on-surface-variant text-xs font-label tracking-wider">Tel</span>
+                <span className="text-on-surface text-sm font-medium whitespace-nowrap">+86 17608467876</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-on-surface-variant text-xs font-label tracking-wider">Address</span>
+                <span className="text-on-surface text-sm font-medium whitespace-nowrap">Guangdong, China, 518100</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Customer Info */}
+          <div className="flex flex-col gap-4">
+            <h3 className="text-on-surface text-lg font-headline font-semibold border-b-2 border-primary-container inline-block pb-1 max-w-max">
+              Customer Information
+            </h3>
+            <div className="bg-surface-container-low p-6 rounded-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1.5fr_1.2fr_1fr_1.2fr] print:grid-cols-[1.5fr_1.2fr_1fr_1.2fr] gap-6">
+              {[
+                { label: 'Name', key: 'name', type: 'text', placeholder: 'Enter name' },
+                { label: 'Email', key: 'email', type: 'email', placeholder: 'Enter email' },
+                { label: 'Tel', key: 'tel', type: 'tel', placeholder: 'Enter phone number' },
+                { label: 'Address', key: 'address', type: 'text', placeholder: 'Enter address' },
+              ].map((field) => (
+                <div key={field.key} className="flex flex-col gap-1">
+                  <span className="text-on-surface-variant text-xs font-label tracking-wider">{field.label}</span>
+                  <input
+                    type={field.type}
+                    placeholder={field.placeholder}
+                    value={customer[field.key as keyof typeof customer]}
+                    onChange={(e) => setCustomer({...customer, [field.key]: e.target.value})}
+                    className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full text-sm font-medium p-0 transition-colors placeholder:text-on-surface-variant/50 text-on-surface"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Product Table */}
+          <div className="flex flex-col w-full overflow-x-auto">
+            <div className="min-w-[800px]">
+              <div className="grid grid-cols-[100px_1fr_80px_25px_20px_20px_40px_40px_65px_65px_40px] print-grid gap-4 bg-secondary-container text-on-secondary-container px-4 py-3 text-xs font-label tracking-wider font-semibold text-center rounded-t-md">
+                <div>Image</div>
+                <div>Description</div>
+                <div>Item</div>
+                <div className="col-span-3">Size(W*D*H)</div>
+                <div>Qty</div>
+                <div>Volume</div>
+                <div className="whitespace-nowrap">Unit Price</div>
+                <div className="whitespace-nowrap">Total Price</div>
+                <div className="print:hidden"></div>
+              </div>
+
+              <div className="flex flex-col text-xs font-body">
+                {items.map((product) => (
+                  <div key={product.id} className="flex border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors group min-h-[120px] px-4 py-2 gap-4 relative">
+                    
+                    <div className="w-[100px] shrink-0 flex flex-col items-center justify-center gap-2">
+                      <div className="w-20 h-20 bg-secondary-container rounded flex items-center justify-center cursor-pointer hover:bg-primary-container transition-colors relative overflow-hidden group/upload">
+                        {product.image ? (
+                          <img src={product.image} alt="Product" className="w-full h-full object-cover" />
+                        ) : (
+                          <ImageIcon className="text-primary group-hover/upload:text-on-primary w-8 h-8" />
+                        )}
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={(e) => handleImageUpload(product.id, e)}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                          title="Upload Image"
+                        />
+                      </div>
+                      <button 
+                        onClick={() => addSubItem(product.id)}
+                        className="text-[10px] text-primary hover:text-primary/80 flex items-center gap-1 print:hidden opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <PlusCircle className="w-3 h-3" /> Add Variant
+                      </button>
+                    </div>
+                    
+                    <div className="flex-1 flex items-center justify-center">
+                      <AutoTextarea 
+                        value={product.desc} 
+                        onChange={(e) => updateProduct(product.id, 'desc', e.target.value)}
+                        placeholder="Enter description"
+                        className="text-xs font-medium text-center w-full"
+                      />
+                    </div>
+
+                    <div className="flex flex-col justify-center gap-2 shrink-0">
+                      {product.subItems.map((subItem) => (
+                        <div key={subItem.id} className="grid grid-cols-[80px_25px_20px_20px_40px_40px_65px_65px_40px] print-grid-subitem gap-4 items-center text-center group/sub">
+                          
+                          <div className="text-on-surface text-center">
+                            <AutoTextarea 
+                              value={subItem.itemName || ''} 
+                              onChange={(e) => updateSubItem(product.id, subItem.id, 'itemName', e.target.value)}
+                              placeholder="Enter item"
+                              className="text-xs text-center"
+                            />
+                          </div>
+
+                          <div className="flex justify-center">
+                            <input 
+                              type="number" 
+                              value={subItem.sizeW || ''} 
+                              onChange={(e) => updateSubItem(product.id, subItem.id, 'sizeW', parseFloat(e.target.value) || 0)}
+                              className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full text-center p-0 text-on-surface [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              placeholder="W"
+                            />
+                          </div>
+                          <div className="flex justify-center">
+                            <input 
+                              type="number" 
+                              value={subItem.sizeD || ''} 
+                              onChange={(e) => updateSubItem(product.id, subItem.id, 'sizeD', parseFloat(e.target.value) || 0)}
+                              className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full text-center p-0 text-on-surface [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              placeholder="D"
+                            />
+                          </div>
+                          <div className="flex justify-center">
+                            <input 
+                              type="number" 
+                              value={subItem.sizeH || ''} 
+                              onChange={(e) => updateSubItem(product.id, subItem.id, 'sizeH', parseFloat(e.target.value) || 0)}
+                              className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full text-center p-0 text-on-surface [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              placeholder="H"
+                            />
+                          </div>
+
+                          <div className="flex justify-center">
+                            <input 
+                              type="number" 
+                              value={subItem.qty || ''} 
+                              onChange={(e) => updateSubItem(product.id, subItem.id, 'qty', parseInt(e.target.value) || 0)}
+                              className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full text-center p-0 text-on-surface [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              placeholder="0"
+                            />
+                          </div>
+
+                          <div className="flex justify-center items-center">
+                            <span className="text-on-surface">
+                              {((subItem.sizeW * subItem.sizeD * subItem.sizeH * subItem.qty) / 1000000).toFixed(3)}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-center gap-0.5">
+                            <span className="text-on-surface-variant">$</span>
+                            <input 
+                              type="number" 
+                              value={subItem.price || ''} 
+                              onChange={(e) => updateSubItem(product.id, subItem.id, 'price', parseFloat(e.target.value) || 0)}
+                              style={{ width: `${Math.max(1, String(subItem.price || '').length) + 0.5}ch` }}
+                              className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none text-center p-0 text-on-surface [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              placeholder="0"
+                            />
+                          </div>
+
+                          <div className="text-on-surface whitespace-nowrap flex items-center justify-center gap-0.5">
+                            <span className="text-on-surface-variant">$</span>
+                            <span>{formatNumber(subItem.qty * subItem.price)}</span>
+                          </div>
+
+                          <div className="print:hidden">
+                            <button 
+                              onClick={() => removeSubItem(product.id, subItem.id)}
+                              className="text-outline hover:text-error transition-colors p-1 rounded-full hover:bg-error-container/50 opacity-0 group-hover/sub:opacity-100 focus:opacity-100"
+                              title="Remove Variant"
+                            >
+                              <X size={18} />
+                            </button>
+                          </div>
+
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 print:hidden">
+              <button 
+                onClick={addProduct}
+                className="flex items-center gap-2 text-primary font-label font-bold text-sm hover:bg-primary-container/10 transition-colors py-2 px-3 rounded-md -ml-3"
+              >
+                <PlusCircle size={18} />
+                <span>Add Product</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-6 border-t border-outline-variant/30">
+            <div className="w-full max-w-[350px] flex flex-col gap-3">
+              <div className="flex justify-between font-body text-on-surface-variant text-sm">
+                <span>Subtotal (EXW)</span>
+                <div className="flex items-center justify-end gap-0.5 font-medium text-on-surface">
+                  <span className="text-on-surface-variant">$</span>
+                  <span>{formatNumber(subtotal)}</span>
+                </div>
+              </div>
+              <div className="flex justify-between font-body text-on-surface-variant text-sm">
+                <span>Total Volume</span>
+                <span className="font-medium text-on-surface text-right">{totalVolume.toFixed(3)} CBM</span>
+              </div>
+              <div className="flex justify-between items-center font-body text-on-surface-variant text-sm">
+                <div className="flex items-center gap-2">
+                  <span>Sea Freight</span>
+                  <input 
+                    type="text" 
+                    placeholder="(Manual Entry)" 
+                    className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-24 text-xs text-on-surface-variant p-0 transition-colors"
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-0.5">
+                  <span className="text-on-surface-variant">$</span>
+                  <input 
+                    type="number" 
+                    value={seaFreight}
+                    onChange={(e) => setSeaFreight(e.target.value)}
+                    style={{ width: `${Math.max(1, String(seaFreight || '').length) + 0.5}ch` }}
+                    className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none text-right p-0 font-medium text-on-surface transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-between font-headline font-bold text-primary mt-3 pt-3 border-t-2 border-primary-container text-lg">
+                <span>Grand Total</span>
+                <div className="flex items-center justify-end gap-0.5">
+                  <span className="text-primary/70">$</span>
+                  <span>{formatNumber(grandTotal)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-surface-container-low p-6 rounded-lg flex flex-col gap-4">
+            <h4 className="text-on-surface text-sm font-headline font-semibold uppercase tracking-wider">Terms & Conditions</h4>
+            <ul className="list-disc list-inside text-sm font-body text-on-surface-variant space-y-2 capitalize">
+              <li><strong className="text-on-surface font-medium">Packing:</strong> Standard export carton packing.</li>
+              <li><strong className="text-on-surface font-medium">Delivery Time:</strong> 20-35 days after receipt of deposit.</li>
+              <li><strong className="text-on-surface font-medium">Payment Term:</strong> 50% T/T deposit in advance, 50% balance before shipment.</li>
+              <li><strong className="text-on-surface font-medium">PI Valid Time:</strong> 30 days from the date of issue.</li>
+            </ul>
+          </div>
+
+        </div>
+      </main>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm print:hidden">
+          <div className="bg-surface-container-lowest p-6 rounded-xl shadow-lg max-w-sm w-full mx-4">
+            <h3 className="text-xl font-headline font-bold text-on-surface mb-2">Delete Quotation</h3>
+            <p className="text-on-surface-variant mb-6">Are you sure you want to delete this quotation? This action cannot be undone.</p>
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 rounded-md text-on-surface-variant hover:bg-surface-container-low transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmDelete}
+                className="px-4 py-2 rounded-md bg-error text-on-error hover:opacity-90 transition-opacity font-medium"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,112 @@
+{
+  "entities": {
+    "Quotation": {
+      "title": "Quotation",
+      "description": "A quotation for a customer.",
+      "type": "object",
+      "properties": {
+        "quoteRef": { "type": "string", "description": "Quotation reference number" },
+        "quoteDate": { "type": "string", "description": "Date of the quotation" },
+        "customer": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "email": { "type": "string" },
+            "tel": { "type": "string" },
+            "address": { "type": "string" }
+          }
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "number" },
+              "image": { "type": "string" },
+              "desc": { "type": "string" },
+              "subItems": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "number" },
+                    "itemName": { "type": "string" },
+                    "sizeW": { "type": "number" },
+                    "sizeD": { "type": "number" },
+                    "sizeH": { "type": "number" },
+                    "qty": { "type": "number" },
+                    "vol": { "type": "number" },
+                    "price": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "seaFreight": { "type": "string" },
+        "subtotal": { "type": "number" },
+        "totalVolume": { "type": "number" },
+        "grandTotal": { "type": "number" },
+        "userId": { "type": "string", "description": "The ID of the user who created the quotation" },
+        "createdAt": { "type": "number", "description": "Timestamp of creation" },
+        "updatedAt": { "type": "number", "description": "Timestamp of last update" }
+      },
+      "required": ["quoteRef", "quoteDate", "customer", "items", "userId", "createdAt", "updatedAt"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "A customer profile aggregated from quotations.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "tel": { "type": "string" },
+        "address": { "type": "string" },
+        "userId": { "type": "string" },
+        "latestQuoteRef": { "type": "string" },
+        "latestQuoteDate": { "type": "string" },
+        "productGroups": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["name", "userId", "createdAt", "updatedAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "A product library item aggregated from quotations.",
+      "type": "object",
+      "properties": {
+        "image": { "type": "string" },
+        "desc": { "type": "string" },
+        "itemName": { "type": "string" },
+        "sizeW": { "type": "number" },
+        "sizeD": { "type": "number" },
+        "sizeH": { "type": "number" },
+        "price": { "type": "number" },
+        "vol": { "type": "number" },
+        "userId": { "type": "string" },
+        "latestQuoteRef": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["desc", "userId", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/quotations/{quotationId}": {
+      "schema": { "$ref": "#/entities/Quotation" },
+      "description": "Stores user quotations."
+    },
+    "/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/Customer" },
+      "description": "Stores customer profiles."
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Stores product library."
+    }
+  }
+}
