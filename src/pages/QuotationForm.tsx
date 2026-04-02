@@ -140,6 +140,7 @@ export default function QuotationForm() {
   ]);
 
   const [seaFreight, setSeaFreight] = useState<string>('450');
+  const [seaFreightNote, setSeaFreightNote] = useState<string>('');
   
   const [customer, setCustomer] = useState({
     name: '',
@@ -164,6 +165,7 @@ export default function QuotationForm() {
             setItems(data.items || []);
             setCustomer(data.customer || { name: '', email: '', tel: '', address: '' });
             setSeaFreight(data.seaFreight || '0');
+            setSeaFreightNote(data.seaFreightNote || '');
             setQuoteDate(data.quoteDate || '');
             setQuoteRef(data.quoteRef || '');
           }
@@ -278,7 +280,10 @@ export default function QuotationForm() {
   };
 
   const subtotal = items.reduce((sum, product) => sum + product.subItems.reduce((subSum, sub) => subSum + (sub.qty * sub.price), 0), 0);
-  const totalVolume = items.reduce((sum, product) => sum + product.subItems.reduce((subSum, sub) => subSum + ((sub.sizeW * sub.sizeD * sub.sizeH * sub.qty) / 1000000), 0), 0);
+  const totalVolume = items.reduce((sum, product) => sum + product.subItems.reduce((subSum, sub) => {
+    const vol = sub.vol || ((sub.sizeW * sub.sizeD * sub.sizeH) / 1000000);
+    return subSum + (vol * sub.qty);
+  }, 0), 0);
   const grandTotal = subtotal + (Number(seaFreight) || 0);
 
   const handleSave = async () => {
@@ -306,6 +311,7 @@ export default function QuotationForm() {
         customer,
         items: compressedItems,
         seaFreight,
+        seaFreightNote,
         subtotal,
         totalVolume,
         grandTotal,
@@ -438,7 +444,17 @@ export default function QuotationForm() {
       if (p.id === productId) {
         return {
           ...p,
-          subItems: p.subItems.map(s => s.id === subItemId ? { ...s, [field]: value } : s)
+          subItems: p.subItems.map(s => {
+            if (s.id === subItemId) {
+              const updated = { ...s, [field]: value };
+              // Recalculate volume if sizes change
+              if (['sizeW', 'sizeD', 'sizeH'].includes(field)) {
+                updated.vol = (updated.sizeW * updated.sizeD * updated.sizeH) / 1000000;
+              }
+              return updated;
+            }
+            return s;
+          })
         };
       }
       return p;
@@ -788,7 +804,9 @@ export default function QuotationForm() {
                   <input 
                     type="text" 
                     placeholder="(Manual Entry)" 
-                    className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-24 text-xs text-on-surface-variant p-0 transition-colors"
+                    value={seaFreightNote}
+                    onChange={(e) => setSeaFreightNote(e.target.value)}
+                    className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-32 text-sm text-on-surface-variant p-0 transition-colors placeholder:text-on-surface-variant/30"
                   />
                 </div>
                 <div className="flex items-center justify-end gap-0.5">
