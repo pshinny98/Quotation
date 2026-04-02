@@ -5,7 +5,7 @@ import { collection, doc, setDoc, getDoc, addDoc, deleteDoc, query, where, onSna
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { db, auth } from '../firebase';
-import { handleFirestoreError, OperationType, compressBase64Image } from '../lib/firestoreUtils';
+import { handleFirestoreError, OperationType, compressBase64Image, hashString } from '../lib/firestoreUtils';
 import { ProductItem, SubItem, Product } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -59,6 +59,15 @@ export default function QuotationForm() {
   const selectFromLibrary = (product: Product) => {
     if (activeItemIndex === null) return;
     
+    // Check if this product is already in the current quotation
+    const isDuplicateInQuotation = items.some((item, idx) => item.image === product.image && idx !== activeItemIndex);
+    if (isDuplicateInQuotation) {
+      alert("This product is already in the quotation. Please update the quantity of the existing item instead.");
+      setIsLibraryModalOpen(false);
+      setActiveItemIndex(null);
+      return;
+    }
+
     setItems(prev => prev.map((item, idx) => {
       if (idx === activeItemIndex) {
         return {
@@ -129,18 +138,11 @@ export default function QuotationForm() {
       id: 2, image: '', desc: 'Solid Oak Dining Table', 
       subItems: [{ id: 21, itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 1, vol: 0.8, price: 600 }] 
     },
-    { 
-      id: 3, image: '', desc: 'Solid Wood Frame + High Density Sponge + Velvet/Fabric/Leather', 
-      subItems: [{ id: 31, itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 6, vol: 0.15, price: 120 }] 
-    },
-    { 
-      id: 4, image: '', desc: 'Round Walnut Coffee Table', 
-      subItems: [{ id: 41, itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 1, vol: 0.4, price: 350 }] 
-    },
   ]);
 
   const [seaFreight, setSeaFreight] = useState<string>('450');
   const [seaFreightNote, setSeaFreightNote] = useState<string>('');
+  const [footerNote, setFooterNote] = useState<string>('');
   
   const [customer, setCustomer] = useState({
     name: '',
@@ -166,6 +168,7 @@ export default function QuotationForm() {
             setCustomer(data.customer || { name: '', email: '', tel: '', address: '' });
             setSeaFreight(data.seaFreight || '0');
             setSeaFreightNote(data.seaFreightNote || '');
+            setFooterNote(data.footerNote || '');
             setQuoteDate(data.quoteDate || '');
             setQuoteRef(data.quoteRef || '');
           }
@@ -281,8 +284,8 @@ export default function QuotationForm() {
 
   const subtotal = items.reduce((sum, product) => sum + product.subItems.reduce((subSum, sub) => subSum + (sub.qty * sub.price), 0), 0);
   const totalVolume = items.reduce((sum, product) => sum + product.subItems.reduce((subSum, sub) => {
-    const vol = sub.vol || ((sub.sizeW * sub.sizeD * sub.sizeH) / 1000000);
-    return subSum + (vol * sub.qty);
+    const vol = (sub.sizeW * sub.sizeD * sub.sizeH * sub.qty) / 1000000;
+    return subSum + vol;
   }, 0), 0);
   const grandTotal = subtotal + (Number(seaFreight) || 0);
 
@@ -312,6 +315,7 @@ export default function QuotationForm() {
         items: compressedItems,
         seaFreight,
         seaFreightNote,
+        footerNote,
         subtotal,
         totalVolume,
         grandTotal,
@@ -386,10 +390,11 @@ export default function QuotationForm() {
         }
       }
 
-      // Update Product Library (Grouped by description)
+      // Update Product Library (Grouped by image hash to prevent duplicates)
       for (const product of compressedItems) {
-        if (product.desc) {
-          const productKey = `${auth.currentUser.uid}-${product.desc}`.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        if (product.desc && product.image) {
+          const imageHash = hashString(product.image);
+          const productKey = `${auth.currentUser.uid}-${imageHash}`;
           const productPath = `products/${productKey}`;
           const productRef = doc(db, 'products', productKey);
           
@@ -404,15 +409,19 @@ export default function QuotationForm() {
           }));
 
           try {
-            await setDoc(productRef, {
-              image: product.image || '',
-              desc: product.desc || '',
-              variants: variants,
-              userId: auth.currentUser.uid,
-              latestQuoteRef: quoteRef,
-              updatedAt: Date.now(),
-              createdAt: Date.now() // Will be merged if exists
-            }, { merge: true });
+            // Check if product already exists to avoid updating it from quotation
+            const productSnap = await getDoc(productRef);
+            if (!productSnap.exists()) {
+              await setDoc(productRef, {
+                image: product.image || '',
+                desc: product.desc || '',
+                variants: variants,
+                userId: auth.currentUser.uid,
+                latestQuoteRef: quoteRef,
+                updatedAt: Date.now(),
+                createdAt: Date.now()
+              });
+            }
           } catch (error) {
             handleFirestoreError(error, OperationType.WRITE, productPath);
           }
@@ -447,9 +456,9 @@ export default function QuotationForm() {
           subItems: p.subItems.map(s => {
             if (s.id === subItemId) {
               const updated = { ...s, [field]: value };
-              // Recalculate volume if sizes change
-              if (['sizeW', 'sizeD', 'sizeH'].includes(field)) {
-                updated.vol = (updated.sizeW * updated.sizeD * updated.sizeH) / 1000000;
+              // Recalculate volume if sizes or qty change
+              if (['sizeW', 'sizeD', 'sizeH', 'qty'].includes(field)) {
+                updated.vol = (updated.sizeW * updated.sizeD * updated.sizeH * updated.qty) / 1000000;
               }
               return updated;
             }
@@ -467,6 +476,16 @@ export default function QuotationForm() {
       const reader = new FileReader();
       reader.onloadend = async () => {
         const compressedDataUrl = await compressBase64Image(reader.result as string);
+        
+        // Check if this image is already in the current quotation
+        const isDuplicateInQuotation = items.some((item, idx) => item.image === compressedDataUrl && idx !== index);
+        if (isDuplicateInQuotation) {
+          alert("This product is already in the quotation. Please update the quantity of the existing item instead.");
+          // Reset the file input
+          e.target.value = '';
+          return;
+        }
+
         updateProduct(id, 'image', compressedDataUrl);
         matchFromLibrary(compressedDataUrl, index);
       };
@@ -735,7 +754,7 @@ export default function QuotationForm() {
 
                           <div className="flex justify-center items-center">
                             <span className="text-on-surface">
-                              {((subItem.sizeW * subItem.sizeD * subItem.sizeH * subItem.qty) / 1000000).toFixed(3)}
+                              {((subItem.sizeW * subItem.sizeD * subItem.sizeH * subItem.qty) / 1000000).toFixed(2)}
                             </span>
                           </div>
 
@@ -785,6 +804,19 @@ export default function QuotationForm() {
             </div>
           </div>
 
+          <div className="mt-0 mb-2 px-4 flex flex-col justify-end min-h-[40px] relative">
+            {/* Hidden div to calculate height for auto-expansion */}
+            <div className="invisible whitespace-pre-wrap text-center text-sm leading-[1.1] py-0 min-h-[1.1em] break-words">
+              {footerNote || ' '}
+            </div>
+            <textarea 
+              value={footerNote}
+              onChange={(e) => setFooterNote(e.target.value)}
+              placeholder="Add a note here..."
+              className="absolute inset-0 w-full h-full bg-transparent border-none outline-none text-center text-sm text-on-surface-variant py-0 transition-colors placeholder:text-on-surface-variant/20 resize-none leading-[1.1] overflow-hidden"
+            />
+          </div>
+
           <div className="flex justify-end pt-6 border-t border-outline-variant/30">
             <div className="w-full max-w-[350px] flex flex-col gap-3">
               <div className="flex justify-between font-body text-on-surface-variant text-sm">
@@ -796,7 +828,10 @@ export default function QuotationForm() {
               </div>
               <div className="flex justify-between font-body text-on-surface-variant text-sm">
                 <span>Total Volume</span>
-                <span className="font-medium text-on-surface text-right">{totalVolume.toFixed(3)} CBM</span>
+                <div className="flex items-center justify-end gap-1 font-medium text-on-surface">
+                  <span>{totalVolume.toFixed(2)}</span>
+                  <span className="text-on-surface-variant text-xs">CBM</span>
+                </div>
               </div>
               <div className="flex justify-between items-center font-body text-on-surface-variant text-sm">
                 <div className="flex items-center gap-2">

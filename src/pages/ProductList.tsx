@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, addDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { handleFirestoreError, OperationType, compressBase64Image } from '../lib/firestoreUtils';
+import { handleFirestoreError, OperationType, compressBase64Image, hashString } from '../lib/firestoreUtils';
 import { Product, ProductVariant } from '../types';
 import { Package, Image as ImageIcon, Plus, Edit2, Trash2, X, Save, Upload, Minus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -13,6 +13,56 @@ export default function ProductList() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
+  const [isDeduplicating, setIsDeduplicating] = useState(false);
+
+  // Find duplicates for the UI warning
+  const duplicateImages = products.reduce((acc, p) => {
+    if (p.image) {
+      acc[p.image] = (acc[p.image] || 0) + 1;
+    }
+    return acc;
+  }, {} as Record<string, number>);
+
+  const hasDuplicates = Object.values(duplicateImages).some((count: any) => (count as number) > 1);
+
+  const deduplicateLibrary = async () => {
+    if (!auth.currentUser || isDeduplicating) return;
+    
+    if (!window.confirm("This will merge all products with the same image into one (keeping the most recent version). Continue?")) return;
+
+    setIsDeduplicating(true);
+    try {
+      const seenImages = new Set<string>();
+      const toDelete: string[] = [];
+      
+      // Sort by updatedAt descending to keep the newest version
+      const sortedProds = [...products].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      
+      for (const prod of sortedProds) {
+        if (prod.image) {
+          if (seenImages.has(prod.image)) {
+            toDelete.push(prod.id!);
+          } else {
+            seenImages.add(prod.image);
+          }
+        }
+      }
+
+      if (toDelete.length > 0) {
+        for (const id of toDelete) {
+          await deleteDoc(doc(db, 'products', id));
+        }
+        alert(`Cleaned up ${toDelete.length} duplicate products.`);
+      } else {
+        alert("No duplicates found.");
+      }
+    } catch (error) {
+      console.error("Error deduplicating:", error);
+      alert("Failed to deduplicate library.");
+    } finally {
+      setIsDeduplicating(false);
+    }
+  };
 
   // Form state
   const [formData, setFormData] = useState<Partial<Product>>({
@@ -123,6 +173,10 @@ export default function ProductList() {
 
     setIsSaving(true);
     try {
+      // Generate a unique ID based on the image content to prevent duplicates
+      const imageHash = formData.image ? hashString(formData.image) : `manual-${Date.now()}`;
+      const productId = `${auth.currentUser.uid}-${imageHash}`;
+
       const productData = {
         ...formData,
         userId: auth.currentUser.uid,
@@ -131,11 +185,14 @@ export default function ProductList() {
         latestQuoteRef: editingProduct?.latestQuoteRef || 'Manual Entry',
       };
 
-      if (editingProduct?.id) {
-        await setDoc(doc(db, 'products', editingProduct.id), productData, { merge: true });
-      } else {
-        await addDoc(collection(db, 'products'), productData);
+      // Use setDoc with the derived ID to prevent duplicates
+      await setDoc(doc(db, 'products', productId), productData, { merge: true });
+      
+      // If we were editing and the ID changed (image changed), delete the old record
+      if (editingProduct?.id && editingProduct.id !== productId) {
+        await deleteDoc(doc(db, 'products', editingProduct.id));
       }
+
       handleCloseModal();
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'products');
@@ -154,6 +211,16 @@ export default function ProductList() {
         <div className="flex items-center gap-3">
           <Package className="text-primary" size={28} />
           <h1 className="text-2xl font-headline font-bold text-primary">Product Library</h1>
+          {hasDuplicates && (
+            <button
+              onClick={deduplicateLibrary}
+              disabled={isDeduplicating}
+              className="ml-4 text-xs bg-error-container text-on-error-container px-3 py-1.5 rounded-full font-bold hover:opacity-80 transition-opacity flex items-center gap-2"
+              title="Merge duplicate products with the same image"
+            >
+              Merge Duplicates
+            </button>
+          )}
         </div>
         <button
           onClick={() => handleOpenModal()}
@@ -219,7 +286,7 @@ export default function ProductList() {
                       </div>
                       <div className="flex justify-between text-[11px] text-on-surface-variant">
                         <span>{variant.sizeW}*{variant.sizeD}*{variant.sizeH} cm</span>
-                        <span>{variant.vol.toFixed(3)} CBM</span>
+                        <span>{variant.vol.toFixed(2)} CBM</span>
                       </div>
                     </div>
                   ))}
