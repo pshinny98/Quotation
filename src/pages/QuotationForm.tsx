@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Image as ImageIcon, X, PlusCircle, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Image as ImageIcon, X, PlusCircle, Save, Trash2, Download } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { collection, doc, setDoc, getDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { toPng } from 'html-to-image';
+import { jsPDF } from 'jspdf';
 import { db, auth } from '../firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { ProductItem, SubItem } from '../types';
@@ -32,7 +34,10 @@ const AutoTextarea = ({ value, onChange, placeholder, className }: { value: stri
 export default function QuotationForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const quotationRef = useRef<HTMLDivElement>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const confirmDelete = async () => {
@@ -117,22 +122,90 @@ export default function QuotationForm() {
     }
   }, [id]);
 
-  const handleExportPDF = () => {
-    window.print();
+  const handleExportPDF = async () => {
+    if (!quotationRef.current) return;
+    
+    setIsExportingPDF(true);
+    try {
+      // Small delay to ensure any pending renders are complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const dataUrl = await toPng(quotationRef.current, {
+        cacheBust: true,
+        backgroundColor: '#ffffff',
+        style: {
+          transform: 'scale(1)',
+          transformOrigin: 'top left',
+        },
+        width: 960,
+      });
+      
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'px',
+        format: 'a4',
+      });
+      
+      const imgProps = pdf.getImageProperties(dataUrl);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      
+      const fileName = `${customer.name || 'Customer'}-${quoteRef || 'Draft'}`;
+      pdf.save(`${fileName}.pdf`);
 
-    if (!id) {
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const dd = String(today.getDate()).padStart(2, '0');
-      const dateString = `${yyyy}${mm}${dd}`;
+      if (!id) {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const dateString = `${yyyy}${mm}${dd}`;
+        
+        const storageKey = `quote_seq_${dateString}`;
+        const currentSeq = parseInt(localStorage.getItem(storageKey) || '1', 10);
+        const nextSeq = currentSeq + 1;
+        localStorage.setItem(storageKey, nextSeq.toString());
+        
+        setQuoteRef(`JF${dateString}${nextSeq}`);
+      }
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      alert('Failed to export PDF. Please try again.');
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
+  const handleExportImage = async () => {
+    if (!quotationRef.current) return;
+    
+    setIsExporting(true);
+    try {
+      // Small delay to ensure any pending renders are complete
+      await new Promise(resolve => setTimeout(resolve, 100));
       
-      const storageKey = `quote_seq_${dateString}`;
-      const currentSeq = parseInt(localStorage.getItem(storageKey) || '1', 10);
-      const nextSeq = currentSeq + 1;
-      localStorage.setItem(storageKey, nextSeq.toString());
+      const dataUrl = await toPng(quotationRef.current, {
+        cacheBust: true,
+        backgroundColor: '#ffffff',
+        style: {
+          transform: 'scale(1)',
+          transformOrigin: 'top left',
+        },
+        // Ensure we capture the full width/height
+        width: 960,
+      });
       
-      setQuoteRef(`JF${dateString}${nextSeq}`);
+      const link = document.createElement('a');
+      const fileName = `${customer.name || 'Customer'}-${quoteRef || 'Draft'}`;
+      link.download = `${fileName}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (error) {
+      console.error('Error exporting image:', error);
+      alert('Failed to export image. Please try again.');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -365,16 +438,28 @@ export default function QuotationForm() {
             {isSaving ? 'Saving...' : 'Save'}
           </button>
           <button 
-            onClick={handleExportPDF}
-            className="h-10 px-6 rounded-md bg-gradient-to-br from-primary to-primary-container text-on-primary text-sm font-label font-bold tracking-wide shadow-sm hover:opacity-90 transition-opacity"
+            onClick={handleExportImage}
+            disabled={isExporting}
+            className="h-10 px-6 rounded-md bg-surface-container text-on-surface text-sm font-label font-bold tracking-wide shadow-sm hover:bg-surface-container-low transition-colors flex items-center gap-2"
           >
-            Export PDF
+            <Download size={18} />
+            {isExporting ? 'Exporting...' : 'Export Image'}
+          </button>
+          <button 
+            onClick={handleExportPDF}
+            disabled={isExportingPDF}
+            className="h-10 px-6 rounded-md bg-gradient-to-br from-primary to-primary-container text-on-primary text-sm font-label font-bold tracking-wide shadow-sm hover:opacity-90 transition-opacity flex items-center gap-2"
+          >
+            {isExportingPDF ? 'Exporting...' : 'Export PDF'}
           </button>
         </div>
       </header>
 
       <main className="flex-grow flex flex-col items-center py-10 px-4 sm:px-8">
-        <div className="w-full max-w-[960px] bg-surface-container-lowest shadow-[0_4px_24px_rgba(0,42,88,0.04)] p-6 sm:p-12 flex flex-col gap-6 print-scale">
+        <div 
+          ref={quotationRef}
+          className="w-full max-w-[960px] bg-surface-container-lowest shadow-[0_4px_24px_rgba(0,42,88,0.04)] p-6 sm:p-12 flex flex-col gap-6 print-scale"
+        >
           {/* Print Header Spacer */}
           <div className="hidden print:block h-16 w-full"></div>
           
