@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Image as ImageIcon, X, PlusCircle, Save, Trash2, Download } from 'lucide-react';
+import { ArrowLeft, Image as ImageIcon, X, PlusCircle, Save, Trash2, Download, Library, Search } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { collection, doc, setDoc, getDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, addDoc, deleteDoc, query, where, onSnapshot } from 'firebase/firestore';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { db, auth } from '../firebase';
-import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
-import { ProductItem, SubItem } from '../types';
+import { handleFirestoreError, OperationType, compressBase64Image } from '../lib/firestoreUtils';
+import { ProductItem, SubItem, Product } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
 
 // Auto-expanding textarea component
 const AutoTextarea = ({ value, onChange, placeholder, className }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, placeholder?: string, className?: string }) => {
@@ -39,6 +40,73 @@ export default function QuotationForm() {
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [libraryProducts, setLibraryProducts] = useState<Product[]>([]);
+  const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false);
+  const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    const q = query(collection(db, 'products'), where('userId', '==', auth.currentUser.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const prods: Product[] = [];
+      snapshot.forEach((doc) => prods.push({ id: doc.id, ...doc.data() } as Product));
+      setLibraryProducts(prods);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const selectFromLibrary = (product: Product) => {
+    if (activeItemIndex === null) return;
+    
+    setItems(prev => prev.map((item, idx) => {
+      if (idx === activeItemIndex) {
+        return {
+          ...item,
+          image: product.image,
+          desc: product.desc,
+          subItems: product.variants.map((v, vIdx) => ({
+            id: Date.now() + vIdx,
+            itemName: v.itemName,
+            sizeW: v.sizeW,
+            sizeD: v.sizeD,
+            sizeH: v.sizeH,
+            qty: 1,
+            vol: v.vol,
+            price: v.price
+          }))
+        };
+      }
+      return item;
+    }));
+    setIsLibraryModalOpen(false);
+    setActiveItemIndex(null);
+  };
+
+  const matchFromLibrary = (base64: string, itemIndex: number) => {
+    const match = libraryProducts.find(p => p.image === base64);
+    if (match) {
+      setItems(prev => prev.map((item, idx) => {
+        if (idx === itemIndex) {
+          return {
+            ...item,
+            desc: match.desc,
+            subItems: match.variants.map((v, vIdx) => ({
+              id: Date.now() + vIdx,
+              itemName: v.itemName,
+              sizeW: v.sizeW,
+              sizeD: v.sizeD,
+              sizeH: v.sizeH,
+              qty: 1,
+              vol: v.vol,
+              price: v.price
+            }))
+          };
+        }
+        return item;
+      }));
+    }
+  };
 
   const confirmDelete = async () => {
     if (!id) return;
@@ -226,11 +294,17 @@ export default function QuotationForm() {
 
     setIsSaving(true);
     try {
+      // Compress all images in items before saving
+      const compressedItems = await Promise.all(items.map(async (item) => ({
+        ...item,
+        image: await compressBase64Image(item.image)
+      })));
+
       const quotationData = {
         quoteRef,
         quoteDate,
         customer,
-        items,
+        items: compressedItems,
         seaFreight,
         subtotal,
         totalVolume,
@@ -262,8 +336,9 @@ export default function QuotationForm() {
       }
 
       // Update Customer Profile
-      const customerPath = `customers/${customer.name.toLowerCase().replace(/\s+/g, '-')}`;
-      const customerRef = doc(db, 'customers', customer.name.toLowerCase().replace(/\s+/g, '-'));
+      const customerId = `${auth.currentUser.uid}-${customer.name.toLowerCase().replace(/\s+/g, '-')}`;
+      const customerPath = `customers/${customerId}`;
+      const customerRef = doc(db, 'customers', customerId);
       let customerSnap;
       try {
         customerSnap = await getDoc(customerRef);
@@ -305,30 +380,35 @@ export default function QuotationForm() {
         }
       }
 
-      // Update Product Library
-      for (const product of items) {
-        for (const subItem of product.subItems) {
-          if (subItem.itemName || product.desc) {
-            const productKey = `${product.desc}-${subItem.itemName}`.toLowerCase().replace(/[^a-z0-9]/g, '-');
-            const productPath = `products/${productKey}`;
-            const productRef = doc(db, 'products', productKey);
-            try {
-              await setDoc(productRef, {
-                image: product.image || '',
-                desc: product.desc || '',
-                itemName: subItem.itemName || '',
-                sizeW: subItem.sizeW || 0,
-                sizeD: subItem.sizeD || 0,
-                sizeH: subItem.sizeH || 0,
-                price: subItem.price || 0,
-                vol: ((subItem.sizeW * subItem.sizeD * subItem.sizeH) / 1000000) || 0,
-                userId: auth.currentUser.uid,
-                latestQuoteRef: quoteRef,
-                updatedAt: Date.now()
-              }, { merge: true });
-            } catch (error) {
-              handleFirestoreError(error, OperationType.WRITE, productPath);
-            }
+      // Update Product Library (Grouped by description)
+      for (const product of compressedItems) {
+        if (product.desc) {
+          const productKey = `${auth.currentUser.uid}-${product.desc}`.toLowerCase().replace(/[^a-z0-9]/g, '-');
+          const productPath = `products/${productKey}`;
+          const productRef = doc(db, 'products', productKey);
+          
+          const variants = product.subItems.map(subItem => ({
+            id: subItem.id.toString(),
+            itemName: subItem.itemName || '',
+            sizeW: subItem.sizeW || 0,
+            sizeD: subItem.sizeD || 0,
+            sizeH: subItem.sizeH || 0,
+            price: subItem.price || 0,
+            vol: ((subItem.sizeW * subItem.sizeD * subItem.sizeH) / 1000000) || 0,
+          }));
+
+          try {
+            await setDoc(productRef, {
+              image: product.image || '',
+              desc: product.desc || '',
+              variants: variants,
+              userId: auth.currentUser.uid,
+              latestQuoteRef: quoteRef,
+              updatedAt: Date.now(),
+              createdAt: Date.now() // Will be merged if exists
+            }, { merge: true });
+          } catch (error) {
+            handleFirestoreError(error, OperationType.WRITE, productPath);
           }
         }
       }
@@ -365,12 +445,14 @@ export default function QuotationForm() {
     }));
   };
 
-  const handleImageUpload = (id: number, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (id: number, e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        updateProduct(id, 'image', reader.result as string);
+      reader.onloadend = async () => {
+        const compressedDataUrl = await compressBase64Image(reader.result as string);
+        updateProduct(id, 'image', compressedDataUrl);
+        matchFromLibrary(compressedDataUrl, index);
       };
       reader.readAsDataURL(file);
     }
@@ -551,10 +633,21 @@ export default function QuotationForm() {
                         <input 
                           type="file" 
                           accept="image/*" 
-                          onChange={(e) => handleImageUpload(product.id, e)}
+                          onChange={(e) => handleImageUpload(product.id, e, items.indexOf(product))}
                           className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                           title="Upload Image"
                         />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveItemIndex(items.indexOf(product));
+                            setIsLibraryModalOpen(true);
+                          }}
+                          className="absolute bottom-0 right-0 p-1 bg-primary text-on-primary rounded-tl-md opacity-0 group-hover/upload:opacity-100 transition-opacity z-10"
+                          title="Pick from Library"
+                        >
+                          <Library size={12} />
+                        </button>
                       </div>
                       <button 
                         onClick={() => addSubItem(product.id)}
@@ -734,28 +827,126 @@ export default function QuotationForm() {
       </main>
 
       {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm print:hidden">
-          <div className="bg-surface-container-lowest p-6 rounded-xl shadow-lg max-w-sm w-full mx-4">
-            <h3 className="text-xl font-headline font-bold text-on-surface mb-2">Delete Quotation</h3>
-            <p className="text-on-surface-variant mb-6">Are you sure you want to delete this quotation? This action cannot be undone.</p>
-            <div className="flex justify-end gap-3">
-              <button 
-                onClick={() => setShowDeleteModal(false)}
-                className="px-4 py-2 rounded-md text-on-surface-variant hover:bg-surface-container-low transition-colors font-medium"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={confirmDelete}
-                className="px-4 py-2 rounded-md bg-error text-on-error hover:opacity-90 transition-opacity font-medium"
-              >
-                Delete
-              </button>
-            </div>
+      <AnimatePresence>
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 print:hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowDeleteModal(false)}
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-surface-container-lowest w-full max-w-md rounded-2xl shadow-2xl p-8 flex flex-col items-center text-center gap-6"
+            >
+              <div className="w-16 h-16 bg-error-container/30 rounded-full flex items-center justify-center text-error">
+                <Trash2 size={32} />
+              </div>
+              <div>
+                <h3 className="text-xl font-headline font-bold text-on-surface mb-2">Delete Quotation?</h3>
+                <p className="text-on-surface-variant">This action cannot be undone. All data for this quotation will be permanently removed.</p>
+              </div>
+              <div className="flex w-full gap-3">
+                <button 
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 h-12 rounded-xl font-bold text-on-surface-variant hover:bg-surface-container-low transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={confirmDelete}
+                  className="flex-1 h-12 rounded-xl bg-error text-on-error font-bold shadow-lg shadow-error/20 hover:opacity-90 transition-opacity"
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
+
+      {/* Product Library Picker Modal */}
+      <AnimatePresence>
+        {isLibraryModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 print:hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsLibraryModalOpen(false)}
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-surface-container-lowest w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+            >
+              <div className="flex items-center justify-between p-6 border-b border-outline-variant/30">
+                <div className="flex items-center gap-3">
+                  <Library className="text-primary" size={24} />
+                  <h2 className="text-xl font-headline font-bold text-primary">Product Library</h2>
+                </div>
+                <div className="flex items-center gap-4 flex-1 max-w-md mx-8">
+                  <div className="relative w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" size={18} />
+                    <input
+                      type="text"
+                      placeholder="Search products..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-surface-container-low pl-10 pr-4 py-2 rounded-full outline-none focus:ring-2 focus:ring-primary/20 border border-transparent focus:border-primary transition-all text-sm"
+                    />
+                  </div>
+                </div>
+                <button onClick={() => setIsLibraryModalOpen(false)} className="p-2 hover:bg-surface-container-low rounded-full transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {libraryProducts
+                  .filter(p => p.desc.toLowerCase().includes(searchQuery.toLowerCase()) || p.productCode?.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((product) => (
+                    <div 
+                      key={product.id} 
+                      onClick={() => selectFromLibrary(product)}
+                      className="bg-surface-container-low rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary transition-all group"
+                    >
+                      <div className="h-32 bg-surface-container-high relative">
+                        {product.image ? (
+                          <img src={product.image} alt={product.desc} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-on-surface-variant/30">
+                            <ImageIcon size={32} />
+                          </div>
+                        )}
+                        {product.productCode && (
+                          <div className="absolute top-1 left-1 bg-primary/90 text-on-primary text-[8px] font-bold px-1.5 py-0.5 rounded shadow-sm uppercase">
+                            {product.productCode}
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-3">
+                        <p className="text-xs font-bold text-on-surface line-clamp-2 mb-1">{product.desc}</p>
+                        <p className="text-[10px] text-on-surface-variant">{product.variants.length} variants</p>
+                      </div>
+                    </div>
+                  ))}
+                {libraryProducts.length === 0 && (
+                  <div className="col-span-full py-12 text-center text-on-surface-variant">
+                    Your product library is empty.
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

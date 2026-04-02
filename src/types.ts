@@ -52,16 +52,22 @@ export interface Customer {
   updatedAt: number;
 }
 
-export interface Product {
-  id?: string;
-  image: string;
-  desc: string;
+export interface ProductVariant {
+  id: string;
   itemName: string;
   sizeW: number;
   sizeD: number;
   sizeH: number;
   price: number;
   vol: number;
+}
+
+export interface Product {
+  id?: string;
+  productCode?: string;
+  image: string;
+  desc: string;
+  variants: ProductVariant[];
   userId: string;
   latestQuoteRef: string;
   createdAt: number;
