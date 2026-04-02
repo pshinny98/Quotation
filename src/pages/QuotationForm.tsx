@@ -153,6 +153,11 @@ export default function QuotationForm() {
 
   const [quoteDate, setQuoteDate] = useState('');
   const [quoteRef, setQuoteRef] = useState('');
+  const [displaySettings, setDisplaySettings] = useState({
+    showEmail: true,
+    showTel: true,
+    showAddress: true
+  });
 
   useEffect(() => {
     if (id) {
@@ -171,6 +176,7 @@ export default function QuotationForm() {
             setFooterNote(data.footerNote || '');
             setQuoteDate(data.quoteDate || '');
             setQuoteRef(data.quoteRef || '');
+            setDisplaySettings(data.displaySettings || { showEmail: true, showTel: true, showAddress: true });
           }
         } catch (error) {
           handleFirestoreError(error, OperationType.GET, path);
@@ -312,6 +318,7 @@ export default function QuotationForm() {
         quoteRef,
         quoteDate,
         customer,
+        displaySettings,
         items: compressedItems,
         seaFreight,
         seaFreightNote,
@@ -356,12 +363,14 @@ export default function QuotationForm() {
         handleFirestoreError(error, OperationType.GET, customerPath);
       }
       
-      // Extract unique product groups (descriptions)
+      // Extract unique product groups (descriptions) and images
       const productGroups = Array.from(new Set(items.map(i => i.desc).filter(Boolean)));
+      const productImages = Array.from(new Set(items.map(i => i.image).filter(Boolean)));
 
       if (customerSnap.exists()) {
         const existingData = customerSnap.data();
         const updatedGroups = Array.from(new Set([...(existingData.productGroups || []), ...productGroups]));
+        const updatedImages = Array.from(new Set([...(existingData.productImages || []), ...productImages]));
         try {
           await setDoc(customerRef, {
             ...customer,
@@ -369,6 +378,7 @@ export default function QuotationForm() {
             latestQuoteRef: quoteRef,
             latestQuoteDate: quoteDate,
             productGroups: updatedGroups,
+            productImages: updatedImages,
             updatedAt: Date.now()
           }, { merge: true });
         } catch (error) {
@@ -382,6 +392,7 @@ export default function QuotationForm() {
             latestQuoteRef: quoteRef,
             latestQuoteDate: quoteDate,
             productGroups,
+            productImages,
             createdAt: Date.now(),
             updatedAt: Date.now()
           });
@@ -615,27 +626,56 @@ export default function QuotationForm() {
 
           {/* Customer Info */}
           <div className="flex flex-col gap-4">
-            <h3 className="text-on-surface text-lg font-headline font-semibold border-b-2 border-primary-container inline-block pb-1 max-w-max">
-              Customer Information
-            </h3>
-            <div className="bg-surface-container-low p-6 rounded-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1.5fr_1.2fr_1fr_1.2fr] print:grid-cols-[1.5fr_1.2fr_1fr_1.2fr] gap-6">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b-2 border-primary-container pb-1">
+              <h3 className="text-on-surface text-lg font-headline font-semibold max-w-max">
+                Customer Information
+              </h3>
+              <div className={`flex flex-wrap items-center gap-4 px-2 py-1 bg-surface-container-low rounded-md print:hidden ${(isExporting || isExportingPDF) ? 'hidden' : ''}`}>
+                <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Display:</span>
+                {[
+                  { label: 'Email', key: 'showEmail' },
+                  { label: 'Tel', key: 'showTel' },
+                  { label: 'Address', key: 'showAddress' },
+                ].map((toggle) => (
+                  <label key={toggle.key} className="flex items-center gap-2 cursor-pointer group/toggle">
+                    <input 
+                      type="checkbox" 
+                      checked={displaySettings[toggle.key as keyof typeof displaySettings]}
+                      onChange={(e) => setDisplaySettings({...displaySettings, [toggle.key]: e.target.checked})}
+                      className="w-3.5 h-3.5 rounded border-outline-variant text-primary focus:ring-primary/20 cursor-pointer"
+                    />
+                    <span className="text-xs text-on-surface-variant group-hover/toggle:text-primary transition-colors font-medium">{toggle.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="bg-surface-container-low p-6 rounded-lg flex flex-wrap gap-x-12 gap-y-6">
               {[
-                { label: 'Name', key: 'name', type: 'text', placeholder: 'Enter name' },
-                { label: 'Email', key: 'email', type: 'email', placeholder: 'Enter email' },
-                { label: 'Tel', key: 'tel', type: 'tel', placeholder: 'Enter phone number' },
-                { label: 'Address', key: 'address', type: 'text', placeholder: 'Enter address' },
-              ].map((field) => (
-                <div key={field.key} className="flex flex-col gap-1">
-                  <span className="text-on-surface-variant text-xs font-label tracking-wider">{field.label}</span>
-                  <input
-                    type={field.type}
-                    placeholder={field.placeholder}
-                    value={customer[field.key as keyof typeof customer]}
-                    onChange={(e) => setCustomer({...customer, [field.key]: e.target.value})}
-                    className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full text-sm font-medium p-0 transition-colors placeholder:text-on-surface-variant/50 text-on-surface"
-                  />
-                </div>
-              ))}
+                { label: 'Name', key: 'name', type: 'text', placeholder: 'Enter name', width: 'w-full sm:w-[200px]' },
+                { label: 'Email', key: 'email', type: 'email', placeholder: 'Enter email', showKey: 'showEmail', width: 'w-full sm:w-[180px]' },
+                { label: 'Tel', key: 'tel', type: 'tel', placeholder: 'Enter phone number', showKey: 'showTel', width: 'w-full sm:w-[150px]' },
+                { label: 'Address', key: 'address', type: 'text', placeholder: 'Enter address', showKey: 'showAddress', width: 'w-full sm:w-[200px]' },
+              ].map((field) => {
+                const isVisible = !field.showKey || displaySettings[field.showKey as keyof typeof displaySettings];
+                
+                if (!isVisible) return null;
+
+                return (
+                  <div 
+                    key={field.key} 
+                    className={`flex flex-col gap-1 transition-all duration-300 ${field.width}`}
+                  >
+                    <span className="text-on-surface-variant text-xs font-label tracking-wider">{field.label}</span>
+                    <input
+                      type={field.type}
+                      placeholder={field.placeholder}
+                      value={customer[field.key as keyof typeof customer]}
+                      onChange={(e) => setCustomer({...customer, [field.key]: e.target.value})}
+                      className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full text-sm font-medium p-0 transition-colors placeholder:text-on-surface-variant/50 text-on-surface"
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
 

@@ -28,6 +28,11 @@ export interface Quotation {
   quoteRef: string;
   quoteDate: string;
   customer: CustomerInfo;
+  displaySettings?: {
+    showEmail: boolean;
+    showTel: boolean;
+    showAddress: boolean;
+  };
   items: ProductItem[];
   seaFreight: string;
   subtotal: number;
@@ -44,10 +49,17 @@ export interface Customer {
   email: string;
   tel: string;
   address: string;
+  avatar?: string;
+  country?: string;
+  linkedin?: string;
+  facebook?: string;
+  whatsapp?: string;
+  website?: string;
   userId: string;
   latestQuoteRef: string;
   latestQuoteDate: string;
   productGroups: string[];
+  productImages?: string[];
   createdAt: number;
   updatedAt: number;
 }

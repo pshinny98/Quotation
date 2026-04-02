@@ -1,15 +1,29 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { Customer, Quotation } from '../types';
 import { Link } from 'react-router-dom';
-import { Users, FileText } from 'lucide-react';
+import { Users, FileText, Plus, Edit2, Trash2, X, Mail, Phone, MapPin, Camera, User, Globe, Linkedin, Facebook, MessageCircle, Flag } from 'lucide-react';
 
 export default function CustomerList() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    tel: '',
+    address: '',
+    avatar: '',
+    country: '',
+    linkedin: '',
+    facebook: '',
+    whatsapp: '',
+    website: ''
+  });
 
   useEffect(() => {
     if (!auth.currentUser) return;
@@ -45,51 +59,237 @@ export default function CustomerList() {
     };
   }, []);
 
+  const handleOpenModal = (customer?: Customer) => {
+    if (customer) {
+      setEditingCustomer(customer);
+      setFormData({
+        name: customer.name,
+        email: customer.email,
+        tel: customer.tel,
+        address: customer.address,
+        avatar: customer.avatar || '',
+        country: customer.country || '',
+        linkedin: customer.linkedin || '',
+        facebook: customer.facebook || '',
+        whatsapp: customer.whatsapp || '',
+        website: customer.website || ''
+      });
+    } else {
+      setEditingCustomer(null);
+      setFormData({
+        name: '',
+        email: '',
+        tel: '',
+        address: '',
+        avatar: '',
+        country: '',
+        linkedin: '',
+        facebook: '',
+        whatsapp: '',
+        website: ''
+      });
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingCustomer(null);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      setFormData(prev => ({ ...prev, avatar: base64String }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!auth.currentUser) return;
+
+    try {
+      if (editingCustomer) {
+        const customerRef = doc(db, 'customers', editingCustomer.id!);
+        await updateDoc(customerRef, {
+          ...formData,
+          updatedAt: Date.now()
+        });
+      } else {
+        await addDoc(collection(db, 'customers'), {
+          ...formData,
+          userId: auth.currentUser.uid,
+          productGroups: [],
+          productImages: [],
+          latestQuoteRef: '',
+          latestQuoteDate: '',
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        });
+      }
+      handleCloseModal();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'customers');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this customer?')) return;
+    try {
+      await deleteDoc(doc(db, 'customers', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'customers');
+    }
+  };
+
+  // Group customers by name
+  const groupedCustomers = customers.reduce((acc: { [key: string]: Customer[] }, customer) => {
+    const name = customer.name.toLowerCase();
+    if (!acc[name]) acc[name] = [];
+    acc[name].push(customer);
+    return acc;
+  }, {});
+
   if (loading) {
     return <div className="p-8 text-on-surface-variant">Loading customers...</div>;
   }
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
-      <div className="flex items-center gap-3 mb-8">
-        <Users className="text-primary" size={28} />
-        <h1 className="text-2xl font-headline font-bold text-primary">Customer Directory</h1>
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+          <Users className="text-primary" size={28} />
+          <h1 className="text-2xl font-headline font-bold text-primary">Customer Directory</h1>
+        </div>
+        <button
+          onClick={() => handleOpenModal()}
+          className="bg-primary text-on-primary px-4 py-2 rounded-lg flex items-center gap-2 font-medium hover:bg-primary/90 transition-colors shadow-sm"
+        >
+          <Plus size={20} />
+          Add Customer
+        </button>
       </div>
 
       <div className="grid gap-6">
-        {customers.length === 0 ? (
+        {Object.keys(groupedCustomers).length === 0 ? (
           <div className="bg-surface-container-lowest p-8 rounded-lg text-center text-on-surface-variant shadow-[0_4px_24px_rgba(0,42,88,0.04)]">
-            No customers found. Save a quotation to generate customer profiles.
+            No customers found. Save a quotation or add a customer manually.
           </div>
         ) : (
-          customers.map((customer) => {
+          (Object.values(groupedCustomers) as Customer[][]).map((customerGroup) => {
+            // Use the first customer in the group as the primary display
+            const customer = customerGroup[0];
+            
+            // Collect all quotations for all customers in this group (same name)
             const customerQuotes = quotations
               .filter(q => q.customer.name.toLowerCase() === customer.name.toLowerCase())
               .sort((a, b) => b.createdAt - a.createdAt);
+
+            // Collect all product images from all customers in this group
+            const allProductImages = Array.from(new Set(
+              customerGroup.flatMap(c => c.productImages || [])
+            ));
 
             return (
               <div key={customer.id} className="bg-surface-container-lowest rounded-lg shadow-[0_4px_24px_rgba(0,42,88,0.04)] overflow-hidden flex flex-col md:flex-row">
                 {/* Customer Info */}
                 <div className="p-6 md:w-1/3 bg-surface-container-low/30 border-r border-outline-variant/30 flex flex-col gap-4">
-                  <div>
-                    <h2 className="text-xl font-headline font-bold text-on-surface">{customer.name}</h2>
-                    <p className="text-sm text-on-surface-variant mt-1">{customer.email || 'No email provided'}</p>
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-4">
+                      <div className="w-16 h-16 rounded-full overflow-hidden bg-surface-container-high border-2 border-primary/20 flex-shrink-0">
+                        {customer.avatar ? (
+                          <img src={customer.avatar} alt={customer.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-primary/30">
+                            <User size={32} />
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-headline font-bold text-on-surface">{customer.name}</h2>
+                        <p className="text-sm text-on-surface-variant mt-1 flex items-center gap-2">
+                          <Mail size={14} />
+                          {customer.email || 'No email'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => handleOpenModal(customer)}
+                        className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-full transition-colors"
+                        title="Edit Customer"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(customer.id!)}
+                        className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-full transition-colors"
+                        title="Delete Customer"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                   <div className="text-sm flex flex-col gap-2">
-                    <p><strong className="text-on-surface font-medium">Tel:</strong> {customer.tel || 'N/A'}</p>
-                    <p><strong className="text-on-surface font-medium">Address:</strong> {customer.address || 'N/A'}</p>
+                    {customer.country && (
+                      <p className="flex items-center gap-2">
+                        <Flag size={14} className="text-on-surface-variant" />
+                        <strong className="text-on-surface font-medium">Country:</strong> {customer.country}
+                      </p>
+                    )}
+                    <p className="flex items-center gap-2">
+                      <Phone size={14} className="text-on-surface-variant" />
+                      <strong className="text-on-surface font-medium">Tel:</strong> {customer.tel || 'N/A'}
+                    </p>
+                    {customer.whatsapp && (
+                      <p className="flex items-center gap-2">
+                        <MessageCircle size={14} className="text-on-surface-variant" />
+                        <strong className="text-on-surface font-medium">WhatsApp:</strong> {customer.whatsapp}
+                      </p>
+                    )}
+                    <p className="flex items-start gap-2">
+                      <MapPin size={14} className="text-on-surface-variant mt-1" />
+                      <span className="flex-1">
+                        <strong className="text-on-surface font-medium">Address:</strong> {customer.address || 'N/A'}
+                      </span>
+                    </p>
+                    {customer.website && (
+                      <p className="flex items-center gap-2">
+                        <Globe size={14} className="text-on-surface-variant" />
+                        <a href={customer.website.startsWith('http') ? customer.website : `https://${customer.website}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">
+                          {customer.website}
+                        </a>
+                      </p>
+                    )}
+                    <div className="flex gap-3 mt-1">
+                      {customer.linkedin && (
+                        <a href={customer.linkedin.startsWith('http') ? customer.linkedin : `https://${customer.linkedin}`} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors">
+                          <Linkedin size={18} />
+                        </a>
+                      )}
+                      {customer.facebook && (
+                        <a href={customer.facebook.startsWith('http') ? customer.facebook : `https://${customer.facebook}`} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors">
+                          <Facebook size={18} />
+                        </a>
+                      )}
+                    </div>
                   </div>
                   <div className="mt-2">
-                    <strong className="text-sm text-on-surface font-medium block mb-2">Product Groups:</strong>
+                    <strong className="text-sm text-on-surface font-medium block mb-3">Product Groups:</strong>
                     <div className="flex flex-wrap gap-2">
-                      {customer.productGroups && customer.productGroups.length > 0 ? (
-                        customer.productGroups.map((group, idx) => (
-                          <span key={idx} className="bg-secondary-container text-on-secondary-container text-xs px-2 py-1 rounded-md font-medium truncate max-w-full">
-                            {group}
-                          </span>
+                      {allProductImages.length > 0 ? (
+                        allProductImages.map((img, idx) => (
+                          <div key={idx} className="w-12 h-12 rounded-lg overflow-hidden border border-outline-variant/30 bg-surface-container-high">
+                            <img src={img} alt="" className="w-full h-full object-cover" />
+                          </div>
                         ))
                       ) : (
-                        <span className="text-xs text-on-surface-variant">None</span>
+                        <span className="text-xs text-on-surface-variant italic">No images available</span>
                       )}
                     </div>
                   </div>
@@ -127,7 +327,7 @@ export default function CustomerList() {
                           ))
                         ) : (
                           <tr>
-                            <td colSpan={4} className="py-4 text-center text-on-surface-variant">No quotations found.</td>
+                            <td colSpan={4} className="py-4 text-center text-on-surface-variant italic">No quotations found.</td>
                           </tr>
                         )}
                       </tbody>
@@ -139,6 +339,166 @@ export default function CustomerList() {
           })
         )}
       </div>
+
+      {/* Add/Edit Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-surface-container-lowest rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-outline-variant/30">
+              <h2 className="text-xl font-headline font-bold text-primary">
+                {editingCustomer ? 'Edit Customer' : 'Add New Customer'}
+              </h2>
+              <button onClick={handleCloseModal} className="p-2 hover:bg-surface-container-low rounded-full transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSave}>
+              <div className="max-h-[70vh] overflow-y-auto p-6 flex flex-col gap-4">
+                <div className="flex flex-col items-center mb-4">
+                  <div className="relative group">
+                    <div className="w-24 h-24 rounded-full overflow-hidden bg-surface-container-low border-2 border-dashed border-outline-variant group-hover:border-primary transition-colors flex items-center justify-center">
+                      {formData.avatar ? (
+                        <img src={formData.avatar} alt="Avatar Preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <User size={40} className="text-on-surface-variant/30" />
+                      )}
+                    </div>
+                    <label className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-full">
+                      <Camera size={24} />
+                      <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                    </label>
+                  </div>
+                  <p className="text-[10px] text-on-surface-variant mt-2 uppercase tracking-wider font-label">Click to upload avatar</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Customer Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="e.g. John Doe"
+                    />
+                  </div>
+                  
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Country</label>
+                    <input
+                      type="text"
+                      value={formData.country}
+                      onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="e.g. USA"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Email Address</label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="e.g. john@example.com"
+                    />
+                  </div>
+                  
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Telephone</label>
+                    <input
+                      type="tel"
+                      value={formData.tel}
+                      onChange={(e) => setFormData({ ...formData, tel: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="e.g. +1 234 567 890"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">WhatsApp</label>
+                    <input
+                      type="text"
+                      value={formData.whatsapp}
+                      onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="e.g. +1 234 567 890"
+                    />
+                  </div>
+                  
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Website</label>
+                    <input
+                      type="text"
+                      value={formData.website}
+                      onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="e.g. www.example.com"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-wider uppercase tracking-wider">LinkedIn</label>
+                    <input
+                      type="text"
+                      value={formData.linkedin}
+                      onChange={(e) => setFormData({ ...formData, linkedin: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="Profile URL"
+                    />
+                  </div>
+                  
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Facebook</label>
+                    <input
+                      type="text"
+                      value={formData.facebook}
+                      onChange={(e) => setFormData({ ...formData, facebook: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="Profile URL"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Address</label>
+                  <textarea
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all min-h-[80px]"
+                    placeholder="e.g. 123 Main St, City, Country"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 mt-4">
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    className="px-6 py-2 rounded-lg font-medium hover:bg-surface-container-low transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-primary text-on-primary px-8 py-2 rounded-lg font-medium hover:bg-primary/90 transition-colors shadow-sm"
+                  >
+                    {editingCustomer ? 'Update' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
