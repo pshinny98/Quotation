@@ -3,8 +3,9 @@ import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, addDoc } 
 import { db, auth } from '../firebase';
 import { handleFirestoreError, OperationType, compressBase64Image, hashString } from '../lib/firestoreUtils';
 import { Product, ProductVariant } from '../types';
-import { Package, Image as ImageIcon, Plus, Edit2, Trash2, X, Save, Upload, Minus } from 'lucide-react';
+import { Package, Image as ImageIcon, Plus, Edit2, Trash2, X, Save, Upload, Minus, Filter, ChevronDown, Tag, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { PRODUCT_CATEGORIES, CategoryName } from '../constants';
 
 export default function ProductList() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -14,6 +15,9 @@ export default function ProductList() {
   const [isSaving, setIsSaving] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [isDeduplicating, setIsDeduplicating] = useState(false);
+  const [filterCategory, setFilterCategory] = useState<string>('All');
+  const [filterSubcategory, setFilterSubcategory] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Find duplicates for the UI warning
   const duplicateImages = products.reduce((acc, p) => {
@@ -69,6 +73,8 @@ export default function ProductList() {
     productCode: '',
     desc: '',
     image: '',
+    category: '',
+    subcategory: '',
     variants: [{ id: Date.now().toString(), itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, price: 0, vol: 0 }],
   });
 
@@ -103,6 +109,8 @@ export default function ProductList() {
         productCode: '',
         desc: '',
         image: '',
+        category: '',
+        subcategory: '',
         variants: [{ id: Date.now().toString(), itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, price: 0, vol: 0 }],
       });
     }
@@ -205,6 +213,15 @@ export default function ProductList() {
     return <div className="p-8 text-on-surface-variant">Loading products...</div>;
   }
 
+  const filteredProducts = products.filter(p => {
+    const categoryMatch = filterCategory === 'All' || p.category === filterCategory;
+    const subcategoryMatch = filterSubcategory === 'All' || p.subcategory === filterSubcategory;
+    const searchMatch = searchQuery === '' || 
+      p.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.productCode && p.productCode.toLowerCase().includes(searchQuery.toLowerCase()));
+    return categoryMatch && subcategoryMatch && searchMatch;
+  });
+
   return (
     <div className="p-8 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-8">
@@ -231,14 +248,76 @@ export default function ProductList() {
         </button>
       </div>
 
+      {/* Filters Bar */}
+      <div className="bg-surface-container-low p-4 rounded-xl mb-8 flex flex-wrap items-center gap-4 shadow-sm border border-outline-variant/30">
+        <div className="flex-1 min-w-[240px] relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" size={18} />
+          <input
+            type="text"
+            placeholder="Search description or code..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-surface-container-lowest rounded-lg outline-none border border-transparent focus:border-primary transition-all text-sm"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 bg-surface-container-lowest px-3 py-2 rounded-lg border border-outline-variant/30">
+          <Filter size={16} className="text-primary" />
+          <select
+            value={filterCategory}
+            onChange={(e) => {
+              setFilterCategory(e.target.value);
+              setFilterSubcategory('All');
+            }}
+            className="bg-transparent outline-none text-sm font-medium text-on-surface cursor-pointer"
+          >
+            <option value="All">All Categories</option>
+            {Object.keys(PRODUCT_CATEGORIES).map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+        </div>
+
+        {filterCategory !== 'All' && (
+          <div className="flex items-center gap-2 bg-surface-container-lowest px-3 py-2 rounded-lg border border-outline-variant/30">
+            <ChevronDown size={16} className="text-primary" />
+            <select
+              value={filterSubcategory}
+              onChange={(e) => setFilterSubcategory(e.target.value)}
+              className="bg-transparent outline-none text-sm font-medium text-on-surface cursor-pointer"
+            >
+              <option value="All">All Subcategories</option>
+              {PRODUCT_CATEGORIES[filterCategory as CategoryName].map(sub => (
+                <option key={sub} value={sub}>{sub}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {(filterCategory !== 'All' || filterSubcategory !== 'All' || searchQuery !== '') && (
+          <button
+            onClick={() => {
+              setFilterCategory('All');
+              setFilterSubcategory('All');
+              setSearchQuery('');
+            }}
+            className="text-xs font-bold text-primary hover:underline uppercase tracking-wider px-2"
+          >
+            Clear Filters
+          </button>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {products.length === 0 ? (
+        {filteredProducts.length === 0 ? (
           <div className="col-span-full bg-surface-container-lowest p-8 rounded-lg text-center text-on-surface-variant shadow-[0_4px_24px_rgba(0,42,88,0.04)]">
-            No products found. Save a quotation to generate product library or add one manually.
+            {products.length === 0 
+              ? "No products found. Save a quotation to generate product library or add one manually."
+              : "No products match your filters."}
           </div>
         ) : (
-          products.map((product) => (
-            <div key={product.id} className="bg-surface-container-lowest rounded-lg shadow-[0_4px_24px_rgba(0,42,88,0.04)] overflow-hidden flex flex-col hover:shadow-md transition-shadow group">
+          filteredProducts.map((product) => (
+            <div key={product.id} className="bg-surface-container-lowest rounded-lg shadow-[0_4px_24px_rgba(0,42,88,0.04)] overflow-hidden flex flex-col hover:shadow-md transition-shadow group relative">
               {/* Product Image */}
               <div className="h-48 bg-surface-container-low flex items-center justify-center relative">
                 {product.image ? (
@@ -246,11 +325,20 @@ export default function ProductList() {
                 ) : (
                   <ImageIcon className="text-on-surface-variant/50" size={48} />
                 )}
-                {product.productCode && (
-                  <div className="absolute top-2 left-2 bg-secondary-container/90 text-on-secondary-container text-[10px] font-bold px-2 py-1 rounded-md shadow-sm uppercase tracking-wider">
-                    {product.productCode}
-                  </div>
-                )}
+                
+                <div className="absolute top-2 left-2 flex flex-col gap-1">
+                  {product.productCode && (
+                    <div className="bg-secondary-container/90 text-on-secondary-container text-[10px] font-bold px-2 py-1 rounded-md shadow-sm uppercase tracking-wider">
+                      {product.productCode}
+                    </div>
+                  )}
+                  {product.category && (
+                    <div className="bg-primary-container/90 text-on-primary-container text-[9px] font-bold px-2 py-0.5 rounded-md shadow-sm uppercase tracking-wider flex items-center gap-1">
+                      <Tag size={8} />
+                      {product.category}
+                    </div>
+                  )}
+                </div>
                 
                 {/* Actions Overlay */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
@@ -292,8 +380,13 @@ export default function ProductList() {
                   ))}
                 </div>
 
-                <div className="text-[10px] text-on-surface-variant mt-auto pt-2 flex justify-between items-center">
-                  <span>Last Quote: <strong className="text-on-surface">{product.latestQuoteRef}</strong></span>
+                <div className="text-[10px] text-on-surface-variant mt-auto pt-2 flex flex-col gap-1">
+                  {product.subcategory && (
+                    <span className="text-primary font-medium">{product.subcategory}</span>
+                  )}
+                  <div className="flex justify-between items-center">
+                    <span>Last Quote: <strong className="text-on-surface">{product.latestQuoteRef}</strong></span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -371,9 +464,39 @@ export default function ProductList() {
                       <textarea
                         value={formData.desc}
                         onChange={(e) => setFormData({ ...formData, desc: e.target.value })}
-                        className="bg-surface-container-low px-4 py-2 rounded-lg outline-none focus:ring-2 focus:ring-primary/20 border border-transparent focus:border-primary transition-all min-h-[100px] resize-none"
+                        className="bg-surface-container-low px-4 py-2 rounded-lg outline-none focus:ring-2 focus:ring-primary/20 border border-transparent focus:border-primary transition-all min-h-[80px] resize-none"
                         placeholder="Enter product materials, features, etc."
                       />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Category</label>
+                        <select
+                          value={formData.category || ''}
+                          onChange={(e) => setFormData({ ...formData, category: e.target.value, subcategory: '' })}
+                          className="bg-surface-container-low px-4 py-2 rounded-lg outline-none focus:ring-2 focus:ring-primary/20 border border-transparent focus:border-primary transition-all text-sm"
+                        >
+                          <option value="">Select Category</option>
+                          {Object.keys(PRODUCT_CATEGORIES).map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Subcategory</label>
+                        <select
+                          value={formData.subcategory || ''}
+                          onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
+                          disabled={!formData.category}
+                          className="bg-surface-container-low px-4 py-2 rounded-lg outline-none focus:ring-2 focus:ring-primary/20 border border-transparent focus:border-primary transition-all text-sm disabled:opacity-50"
+                        >
+                          <option value="">Select Subcategory</option>
+                          {formData.category && PRODUCT_CATEGORIES[formData.category as CategoryName].map(sub => (
+                            <option key={sub} value={sub}>{sub}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
                 </div>

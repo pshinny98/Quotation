@@ -4,7 +4,7 @@ import { db, auth } from '../firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { Customer, Quotation } from '../types';
 import { Link } from 'react-router-dom';
-import { Users, FileText, Plus, Edit2, Trash2, X, Mail, Phone, MapPin, Camera, User, Globe, Linkedin, Facebook, MessageCircle, Flag } from 'lucide-react';
+import { Users, FileText, Plus, Edit2, Trash2, X, Mail, Phone, MapPin, Camera, User, Globe, Linkedin, Facebook, MessageCircle, Flag, Filter, Calendar, Search, ShoppingBag } from 'lucide-react';
 
 export default function CustomerList() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -24,6 +24,10 @@ export default function CustomerList() {
     whatsapp: '',
     website: ''
   });
+
+  const [selectedCountry, setSelectedCountry] = useState<string>('All');
+  const [selectedMonth, setSelectedMonth] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
     if (!auth.currentUser) return;
@@ -72,7 +76,9 @@ export default function CustomerList() {
         linkedin: customer.linkedin || '',
         facebook: customer.facebook || '',
         whatsapp: customer.whatsapp || '',
-        website: customer.website || ''
+        alibaba: customer.alibaba || '',
+        website: customer.website || '',
+        notes: customer.notes || ''
       });
     } else {
       setEditingCustomer(null);
@@ -86,7 +92,9 @@ export default function CustomerList() {
         linkedin: '',
         facebook: '',
         whatsapp: '',
-        website: ''
+        alibaba: '',
+        website: '',
+        notes: ''
       });
     }
     setIsModalOpen(true);
@@ -147,8 +155,38 @@ export default function CustomerList() {
     }
   };
 
-  // Group customers by name
-  const groupedCustomers = customers.reduce((acc: { [key: string]: Customer[] }, customer) => {
+  // Extract unique countries and months for filters
+  const countries: string[] = Array.from(new Set<string>(customers.map(c => c.country).filter(Boolean) as string[])).sort();
+  const months: string[] = Array.from(new Set<string>(customers.map(c => {
+    const date = new Date(c.updatedAt);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  }))).sort().reverse();
+
+  const formatMonth = (monthStr: string) => {
+    if (monthStr === 'All') return 'All Months';
+    const [year, month] = monthStr.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  };
+
+  // Filter customers
+  const filteredCustomers = customers.filter(customer => {
+    const countryMatch = selectedCountry === 'All' || customer.country === selectedCountry;
+    
+    const date = new Date(customer.updatedAt);
+    const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const monthMatch = selectedMonth === 'All' || monthStr === selectedMonth;
+    
+    const searchMatch = searchQuery === '' || 
+      customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (customer.email && customer.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (customer.tel && customer.tel.includes(searchQuery));
+
+    return countryMatch && monthMatch && searchMatch;
+  });
+
+  // Group filtered customers by name
+  const groupedCustomers = filteredCustomers.reduce((acc: { [key: string]: Customer[] }, customer) => {
     const name = customer.name.toLowerCase();
     if (!acc[name]) acc[name] = [];
     acc[name].push(customer);
@@ -175,6 +213,61 @@ export default function CustomerList() {
         </button>
       </div>
 
+      {/* Filters Bar */}
+      <div className="bg-surface-container-low p-4 rounded-xl mb-8 flex flex-wrap items-center gap-4 shadow-sm border border-outline-variant/30">
+        <div className="flex-1 min-w-[240px] relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" size={18} />
+          <input
+            type="text"
+            placeholder="Search name, email or tel..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-surface-container-lowest rounded-lg outline-none border border-transparent focus:border-primary transition-all text-sm"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 bg-surface-container-lowest px-3 py-2 rounded-lg border border-outline-variant/30">
+          <Filter size={16} className="text-primary" />
+          <select
+            value={selectedCountry}
+            onChange={(e) => setSelectedCountry(e.target.value)}
+            className="bg-transparent outline-none text-sm font-medium text-on-surface cursor-pointer"
+          >
+            <option value="All">All Countries</option>
+            {countries.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2 bg-surface-container-lowest px-3 py-2 rounded-lg border border-outline-variant/30">
+          <Calendar size={16} className="text-primary" />
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="bg-transparent outline-none text-sm font-medium text-on-surface cursor-pointer"
+          >
+            <option value="All">All Months</option>
+            {months.map(m => (
+              <option key={m} value={m}>{formatMonth(m)}</option>
+            ))}
+          </select>
+        </div>
+
+        {(selectedCountry !== 'All' || selectedMonth !== 'All' || searchQuery !== '') && (
+          <button
+            onClick={() => {
+              setSelectedCountry('All');
+              setSelectedMonth('All');
+              setSearchQuery('');
+            }}
+            className="text-xs font-bold text-primary hover:underline uppercase tracking-wider px-2"
+          >
+            Clear Filters
+          </button>
+        )}
+      </div>
+
       <div className="grid gap-6">
         {Object.keys(groupedCustomers).length === 0 ? (
           <div className="bg-surface-container-lowest p-8 rounded-lg text-center text-on-surface-variant shadow-[0_4px_24px_rgba(0,42,88,0.04)]">
@@ -190,10 +283,12 @@ export default function CustomerList() {
               .filter(q => q.customer.name.toLowerCase() === customer.name.toLowerCase())
               .sort((a, b) => b.createdAt - a.createdAt);
 
-            // Collect all product images from all customers in this group
-            const allProductImages = Array.from(new Set(
-              customerGroup.flatMap(c => c.productImages || [])
-            ));
+            // Collect all product images from all customers in this group AND their quotations
+            const quoteImages = customerQuotes.flatMap(q => q.items.map(i => i.image)).filter(Boolean);
+            const allProductImages = Array.from(new Set([
+              ...customerGroup.flatMap(c => c.productImages || []),
+              ...quoteImages
+            ]));
 
             return (
               <div key={customer.id} className="bg-surface-container-lowest rounded-lg shadow-[0_4px_24px_rgba(0,42,88,0.04)] overflow-hidden flex flex-col md:flex-row">
@@ -246,18 +341,18 @@ export default function CustomerList() {
                       <Phone size={14} className="text-on-surface-variant" />
                       <strong className="text-on-surface font-medium">Tel:</strong> {customer.tel || 'N/A'}
                     </p>
-                    {customer.whatsapp && (
-                      <p className="flex items-center gap-2">
-                        <MessageCircle size={14} className="text-on-surface-variant" />
-                        <strong className="text-on-surface font-medium">WhatsApp:</strong> {customer.whatsapp}
-                      </p>
-                    )}
                     <p className="flex items-start gap-2">
                       <MapPin size={14} className="text-on-surface-variant mt-1" />
                       <span className="flex-1">
                         <strong className="text-on-surface font-medium">Address:</strong> {customer.address || 'N/A'}
                       </span>
                     </p>
+                    {customer.notes && (
+                      <div className="mt-2 p-2 bg-surface-container-lowest rounded border border-outline-variant/30 text-xs text-on-surface-variant italic">
+                        <strong className="text-on-surface font-medium not-italic block mb-1">Notes:</strong>
+                        {customer.notes}
+                      </div>
+                    )}
                     {customer.website && (
                       <p className="flex items-center gap-2">
                         <Globe size={14} className="text-on-surface-variant" />
@@ -266,15 +361,25 @@ export default function CustomerList() {
                         </a>
                       </p>
                     )}
-                    <div className="flex gap-3 mt-1">
+                    <div className="flex gap-3 mt-1 items-center">
                       {customer.linkedin && (
-                        <a href={customer.linkedin.startsWith('http') ? customer.linkedin : `https://${customer.linkedin}`} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors">
+                        <a href={customer.linkedin.startsWith('http') ? customer.linkedin : `https://${customer.linkedin}`} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors" title="LinkedIn">
                           <Linkedin size={18} />
                         </a>
                       )}
                       {customer.facebook && (
-                        <a href={customer.facebook.startsWith('http') ? customer.facebook : `https://${customer.facebook}`} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors">
+                        <a href={customer.facebook.startsWith('http') ? customer.facebook : `https://${customer.facebook}`} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors" title="Facebook">
                           <Facebook size={18} />
+                        </a>
+                      )}
+                      {customer.whatsapp && (
+                        <a href={`https://wa.me/${customer.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors" title="WhatsApp">
+                          <MessageCircle size={18} />
+                        </a>
+                      )}
+                      {customer.alibaba && (
+                        <a href={customer.alibaba.startsWith('http') ? customer.alibaba : `https://${customer.alibaba}`} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors" title="Alibaba">
+                          <ShoppingBag size={18} />
                         </a>
                       )}
                     </div>
@@ -284,8 +389,8 @@ export default function CustomerList() {
                     <div className="flex flex-wrap gap-2">
                       {allProductImages.length > 0 ? (
                         allProductImages.map((img, idx) => (
-                          <div key={idx} className="w-12 h-12 rounded-lg overflow-hidden border border-outline-variant/30 bg-surface-container-high">
-                            <img src={img} alt="" className="w-full h-full object-cover" />
+                          <div key={idx} className="w-16 h-16 rounded-lg overflow-hidden border border-outline-variant/30 bg-surface-container-high hover:border-primary transition-colors cursor-zoom-in group/img">
+                            <img src={img} alt="" className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-300" />
                           </div>
                         ))
                       ) : (
@@ -447,7 +552,7 @@ export default function CustomerList() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-wider uppercase tracking-wider">LinkedIn</label>
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">LinkedIn</label>
                     <input
                       type="text"
                       value={formData.linkedin}
@@ -468,6 +573,30 @@ export default function CustomerList() {
                     />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">WhatsApp (Icon Link)</label>
+                    <input
+                      type="text"
+                      value={formData.whatsapp}
+                      onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="Number or URL"
+                    />
+                  </div>
+                  
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Alibaba</label>
+                    <input
+                      type="text"
+                      value={formData.alibaba}
+                      onChange={(e) => setFormData({ ...formData, alibaba: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="Profile or Store URL"
+                    />
+                  </div>
+                </div>
                 
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Address</label>
@@ -476,6 +605,16 @@ export default function CustomerList() {
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                     className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all min-h-[80px]"
                     placeholder="e.g. 123 Main St, City, Country"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Notes / Remarks</label>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all min-h-[80px]"
+                    placeholder="Add any internal notes about this customer..."
                   />
                 </div>
 

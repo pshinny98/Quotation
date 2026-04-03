@@ -54,10 +54,12 @@ export interface Customer {
   linkedin?: string;
   facebook?: string;
   whatsapp?: string;
+  alibaba?: string;
   website?: string;
   userId: string;
   latestQuoteRef: string;
   latestQuoteDate: string;
+  notes?: string;
   productGroups: string[];
   productImages?: string[];
   createdAt: number;
@@ -79,6 +81,8 @@ export interface Product {
   productCode?: string;
   image: string;
   desc: string;
+  category?: string;
+  subcategory?: string;
   variants: ProductVariant[];
   userId: string;
   latestQuoteRef: string;
