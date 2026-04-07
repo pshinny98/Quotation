@@ -65,9 +65,9 @@
   }
 
   .print-grid {
-    grid-template-columns: 100px 1fr 100px 32px 32px 32px 40px 45px 70px 80px !important;
+    grid-template-columns: 100px 1fr 100px 32px 32px 32px 40px 45px 80px 85px !important;
   }
   .print-grid-subitem {
-    grid-template-columns: 100px 32px 32px 32px 40px 45px 70px 80px !important;
+    grid-template-columns: 100px 32px 32px 32px 40px 45px 80px 85px !important;
   }
 }
