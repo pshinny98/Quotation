@@ -258,7 +258,7 @@ export default function QuotationForm() {
           transform: 'scale(1)',
           transformOrigin: 'top left',
         },
-        width: 960,
+        width: 1024,
       });
       
       const pdf = new jsPDF({
@@ -314,7 +314,7 @@ export default function QuotationForm() {
           transformOrigin: 'top left',
         },
         // Ensure we capture the full width/height
-        width: 960,
+        width: 1024,
       });
       
       const link = document.createElement('a');
@@ -628,7 +628,7 @@ export default function QuotationForm() {
       <main className="flex-grow flex flex-col items-center py-10 px-4 sm:px-8">
         <div 
           ref={quotationRef}
-          className="w-full max-w-[960px] bg-surface-container-lowest shadow-[0_4px_24px_rgba(0,42,88,0.04)] p-6 sm:p-12 flex flex-col gap-6 print-scale"
+          className="w-full max-w-[1024px] bg-surface-container-lowest shadow-[0_4px_24px_rgba(0,42,88,0.04)] p-6 sm:p-12 flex flex-col gap-6 print-scale"
         >
           {/* Print Header Spacer */}
           <div className="hidden print:block h-16 w-full"></div>
@@ -724,7 +724,7 @@ export default function QuotationForm() {
           {/* Product Table */}
           <div className="flex flex-col w-full overflow-x-auto">
             <div className="min-w-[800px]">
-              <div className="grid grid-cols-[100px_1fr_80px_25px_20px_20px_40px_40px_65px_65px_40px] print-grid gap-4 bg-secondary-container text-on-secondary-container px-4 py-3 text-xs font-label tracking-wider font-semibold text-center rounded-t-md">
+              <div className="grid grid-cols-[100px_1fr_100px_32px_32px_32px_40px_45px_70px_80px_40px] print-grid gap-4 bg-secondary-container text-on-secondary-container px-4 py-3 text-xs font-label tracking-wider font-semibold text-center rounded-t-md">
                 <div>Image</div>
                 <div>Description</div>
                 <div>Item</div>
@@ -733,7 +733,7 @@ export default function QuotationForm() {
                 <div>Volume</div>
                 <div className="whitespace-nowrap">Unit Price</div>
                 <div className="whitespace-nowrap">Total Price</div>
-                <div className="print:hidden"></div>
+                <div className={`print:hidden ${(isExporting || isExportingPDF) ? 'hidden' : ''}`}></div>
               </div>
 
               <div className="flex flex-col text-xs font-body">
@@ -743,7 +743,7 @@ export default function QuotationForm() {
                     <div className="w-[100px] shrink-0 flex flex-col items-center justify-center gap-2">
                       <div className="w-20 h-20 bg-secondary-container rounded flex items-center justify-center cursor-pointer hover:bg-primary-container transition-colors relative overflow-hidden group/upload">
                         {product.image ? (
-                          <img src={product.image} alt="Product" className="w-full h-full object-cover" />
+                          <img src={product.image} alt="Product" className="w-full h-full object-contain" />
                         ) : (
                           <ImageIcon className="text-primary group-hover/upload:text-on-primary w-8 h-8" />
                         )}
@@ -785,7 +785,7 @@ export default function QuotationForm() {
 
                     <div className="flex flex-col justify-center gap-2 shrink-0">
                       {product.subItems.map((subItem) => (
-                        <div key={subItem.id} className="grid grid-cols-[80px_25px_20px_20px_40px_40px_65px_65px_40px] print-grid-subitem gap-4 items-center text-center group/sub">
+                        <div key={subItem.id} className="grid grid-cols-[100px_32px_32px_32px_40px_45px_70px_80px_40px] print-grid-subitem gap-4 items-center text-center group/sub">
                           
                           <div className="text-on-surface text-center">
                             <AutoTextarea 
@@ -1054,7 +1054,7 @@ export default function QuotationForm() {
                     >
                       <div className="h-32 bg-surface-container-high relative">
                         {product.image ? (
-                          <img src={product.image} alt={product.desc} className="w-full h-full object-cover" />
+                          <img src={product.image} alt={product.desc} className="w-full h-full object-contain" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-on-surface-variant/30">
                             <ImageIcon size={32} />

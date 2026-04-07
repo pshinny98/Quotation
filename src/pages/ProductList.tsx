@@ -319,9 +319,9 @@ export default function ProductList() {
           filteredProducts.map((product) => (
             <div key={product.id} className="bg-surface-container-lowest rounded-lg shadow-[0_4px_24px_rgba(0,42,88,0.04)] overflow-hidden flex flex-col hover:shadow-md transition-shadow group relative">
               {/* Product Image */}
-              <div className="h-48 bg-surface-container-low flex items-center justify-center relative">
+              <div className="h-48 bg-white flex items-center justify-center relative">
                 {product.image ? (
-                  <img src={product.image} alt={product.desc} className="w-full h-full object-cover" />
+                  <img src={product.image} alt={product.desc} className="w-full h-full object-contain" />
                 ) : (
                   <ImageIcon className="text-on-surface-variant/50" size={48} />
                 )}
@@ -428,7 +428,7 @@ export default function ProductList() {
                     <div className="relative h-48 bg-surface-container-low rounded-xl border-2 border-dashed border-outline-variant/30 flex items-center justify-center overflow-hidden group">
                       {formData.image ? (
                         <>
-                          <img src={formData.image} alt="Preview" className="w-full h-full object-cover" />
+                          <img src={formData.image} alt="Preview" className="w-full h-full object-contain" />
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <label className="cursor-pointer bg-surface-container-lowest text-primary px-4 py-2 rounded-lg font-medium flex items-center gap-2">
                               <Upload size={18} />
