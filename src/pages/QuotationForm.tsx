@@ -724,21 +724,21 @@ export default function QuotationForm() {
           {/* Product Table */}
           <div className="flex flex-col w-full overflow-x-auto">
             <div className="min-w-[800px]">
-              <div className="grid grid-cols-[100px_1fr_100px_40px_40px_40px_45px_55px_95px_100px_40px] print-grid gap-2 bg-secondary-container text-on-secondary-container px-4 py-3 text-xs font-label tracking-wider font-semibold text-center rounded-t-md">
+              <div className="grid grid-cols-[100px_1fr_100px_40px_40px_40px_45px_55px_110px_110px_40px] print-grid gap-1 bg-secondary-container text-on-secondary-container px-2 py-3 text-xs font-label tracking-wider font-semibold text-center rounded-t-md">
                 <div>Image</div>
                 <div>Description</div>
                 <div>Item</div>
                 <div className="col-span-3">Size(W*D*H)</div>
                 <div>Qty</div>
                 <div>Volume</div>
-                <div className="whitespace-nowrap">Unit Price</div>
-                <div className="whitespace-nowrap">Total Price</div>
+                <div className="whitespace-nowrap text-center">Unit Price</div>
+                <div className="whitespace-nowrap text-center">Total Price</div>
                 <div className={`print:hidden ${(isExporting || isExportingPDF) ? 'hidden' : ''}`}></div>
               </div>
 
               <div className="flex flex-col text-xs font-body">
                 {items.map((product) => (
-                  <div key={product.id} className="flex border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors group min-h-[120px] px-4 py-2 gap-4 relative">
+                  <div key={product.id} className="flex border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors group min-h-[120px] px-2 py-2 gap-2 relative">
                     
                     <div className="w-[100px] shrink-0 flex flex-col items-center justify-center gap-2">
                       <div className="w-20 h-20 bg-secondary-container rounded flex items-center justify-center cursor-pointer hover:bg-primary-container transition-colors relative overflow-hidden group/upload">
@@ -785,7 +785,7 @@ export default function QuotationForm() {
 
                     <div className="flex flex-col justify-center gap-2 shrink-0">
                       {product.subItems.map((subItem) => (
-                        <div key={subItem.id} className="grid grid-cols-[100px_40px_40px_40px_45px_55px_95px_100px_40px] print-grid-subitem gap-2 items-center text-center group/sub">
+                        <div key={subItem.id} className="grid grid-cols-[100px_40px_40px_40px_45px_55px_110px_110px_40px] print-grid-subitem gap-1 items-center text-center group/sub">
                           
                           <div className="text-on-surface text-center">
                             <AutoTextarea 
@@ -841,21 +841,26 @@ export default function QuotationForm() {
                           </div>
 
                           <div className="flex items-center justify-center gap-0">
-                            <div className="flex items-center gap-0 w-full">
+                            <div className="flex items-center gap-0">
                               <span className="text-on-surface">$</span>
-                              <input 
-                                type="number" 
-                                value={subItem.price || ''} 
-                                onChange={(e) => updateSubItem(product.id, subItem.id, 'price', parseFloat(e.target.value) || 0)}
-                                className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none text-left p-0 text-on-surface [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none w-full"
-                                placeholder="0"
-                              />
+                              {(isExporting || isExportingPDF) ? (
+                                <span className="text-on-surface">{subItem.price || '0'}</span>
+                              ) : (
+                                <input 
+                                  type="number" 
+                                  value={subItem.price || ''} 
+                                  onChange={(e) => updateSubItem(product.id, subItem.id, 'price', parseFloat(e.target.value) || 0)}
+                                  style={{ width: `${Math.max(1, String(subItem.price || '').length) + 0.5}ch` }}
+                                  className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none text-left p-0 text-on-surface [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-[1ch]"
+                                  placeholder="0"
+                                />
+                              )}
                             </div>
                           </div>
 
                           <div className="text-on-surface whitespace-nowrap flex items-center justify-center gap-0">
                             <span>$</span>
-                            <span className="w-full text-right">{formatNumber(subItem.qty * subItem.price)}</span>
+                            <span>{formatNumber(subItem.qty * subItem.price)}</span>
                           </div>
 
                           <div className={`print:hidden ${(isExporting || isExportingPDF) ? 'hidden' : ''}`}>
@@ -902,19 +907,19 @@ export default function QuotationForm() {
           </div>
 
           <div className="flex justify-end pt-6 border-t border-outline-variant/30">
-            <div className="w-fit min-w-[400px] flex flex-col gap-3">
+            <div className="w-fit min-w-[420px] flex flex-col gap-3">
               <div className="flex justify-between font-body text-on-surface-variant text-sm gap-8">
                 <span>Subtotal (EXW)</span>
-                <div className="flex items-center justify-end gap-0 font-medium text-on-surface min-w-[95px]">
+                <div className="flex items-center justify-end gap-0 font-medium text-on-surface min-w-[120px]">
                   <span>$</span>
                   <span>{formatNumber(subtotal)}</span>
                 </div>
               </div>
               <div className="flex justify-between font-body text-on-surface-variant text-sm gap-8">
                 <span>Total Volume</span>
-                <div className="flex items-center justify-end gap-1 font-medium text-on-surface min-w-[95px]">
+                <div className="flex items-center justify-end gap-1 font-medium text-on-surface min-w-[120px]">
                   <span>{totalVolume.toFixed(2)}</span>
-                  <span className="text-on-surface-variant text-xs">CBM</span>
+                  <span className="text-on-surface-variant text-xs ml-1">CBM</span>
                 </div>
               </div>
               <div className="flex justify-between items-center font-body text-on-surface-variant text-sm gap-8">
@@ -927,23 +932,27 @@ export default function QuotationForm() {
                     className="w-32 text-sm text-on-surface-variant"
                   />
                 </div>
-                <div className="flex items-center justify-end gap-0 shrink-0 min-w-[95px]">
+                <div className="flex items-center justify-end gap-0 shrink-0 min-w-[120px]">
                   <div className="flex items-center gap-0">
                     <span className="text-on-surface">$</span>
-                    <input 
-                      type="number" 
-                      value={seaFreight}
-                      onChange={(e) => setSeaFreight(e.target.value)}
-                      style={{ width: `${Math.max(1, String(seaFreight || '').length) + 0.5}ch` }}
-                      className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none text-left p-0 font-medium text-on-surface transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-[1ch]"
-                      placeholder="0"
-                    />
+                    {(isExporting || isExportingPDF) ? (
+                      <span className="font-medium text-on-surface">{seaFreight || '0'}</span>
+                    ) : (
+                      <input 
+                        type="number" 
+                        value={seaFreight}
+                        onChange={(e) => setSeaFreight(e.target.value)}
+                        style={{ width: `${Math.max(1, String(seaFreight || '').length) + 0.5}ch` }}
+                        className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none text-left p-0 font-medium text-on-surface transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-[1ch]"
+                        placeholder="0"
+                      />
+                    )}
                   </div>
                 </div>
               </div>
               <div className="flex justify-between font-headline font-bold text-primary mt-3 pt-3 border-t-2 border-primary-container text-lg gap-8">
                 <span>Grand Total</span>
-                <div className="flex items-center justify-end gap-0 min-w-[95px]">
+                <div className="flex items-center justify-end gap-0 min-w-[120px]">
                   <span>$</span>
                   <span>{formatNumber(grandTotal)}</span>
                 </div>

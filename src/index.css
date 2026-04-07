@@ -65,11 +65,11 @@
   }
 
   .print-grid {
-    grid-template-columns: 100px 1fr 100px 40px 40px 40px 45px 55px 95px 100px !important;
-    gap: 8px !important;
+    grid-template-columns: 100px 1fr 100px 40px 40px 40px 45px 55px 110px 110px !important;
+    gap: 4px !important;
   }
   .print-grid-subitem {
-    grid-template-columns: 100px 40px 40px 40px 45px 55px 95px 100px !important;
-    gap: 8px !important;
+    grid-template-columns: 100px 40px 40px 40px 45px 55px 110px 110px !important;
+    gap: 4px !important;
   }
 }
