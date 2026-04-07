@@ -12,23 +12,65 @@ import { motion, AnimatePresence } from 'motion/react';
 // Auto-expanding textarea component
 const AutoTextarea = ({ value, onChange, placeholder, className }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, placeholder?: string, className?: string }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const [isFocused, setIsFocused] = useState(false);
   
   useEffect(() => {
     if (ref.current) {
       ref.current.style.height = 'auto';
       ref.current.style.height = ref.current.scrollHeight + 'px';
     }
-  }, [value]);
+  }, [value, isFocused]);
 
   return (
-    <textarea
-      ref={ref}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className={`auto-expand bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full p-0 text-center leading-normal transition-colors ${className}`}
-      rows={1}
-    />
+    <div className="relative w-full min-h-[1.5rem]">
+      {/* Hidden div for background display and export capture */}
+      <div 
+        className={`whitespace-pre-wrap break-words leading-normal p-0 text-center transition-colors ${className} ${!value && !isFocused ? 'text-on-surface-variant/20' : ''}`}
+        aria-hidden="true"
+      >
+        {value || placeholder}
+      </div>
+      
+      {/* Actual textarea for editing */}
+      <textarea
+        ref={ref}
+        value={value}
+        onChange={onChange}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        placeholder={placeholder}
+        className={`absolute inset-0 bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full p-0 text-center leading-normal transition-colors resize-none overflow-hidden ${className} ${isFocused ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+        rows={1}
+      />
+    </div>
+  );
+};
+
+// Auto-expanding input component for single-line text
+const AutoInput = ({ value, onChange, placeholder, className, type = "text" }: { value: string, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, placeholder?: string, className?: string, type?: string }) => {
+  const [isFocused, setIsFocused] = useState(false);
+  
+  return (
+    <div className="relative w-full min-h-[1.25rem]">
+      {/* Div for display and export capture */}
+      <div 
+        className={`whitespace-pre-wrap break-words leading-normal p-0 transition-colors ${className} ${!value && !isFocused ? 'text-on-surface-variant/20' : ''}`}
+        aria-hidden="true"
+      >
+        {value || placeholder}
+      </div>
+      
+      {/* Actual input for editing */}
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        placeholder={placeholder}
+        className={`absolute inset-0 bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full p-0 leading-normal transition-colors ${className} ${isFocused ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+      />
+    </div>
   );
 };
 
@@ -666,12 +708,12 @@ export default function QuotationForm() {
                     className={`flex flex-col gap-1 transition-all duration-300 ${field.width}`}
                   >
                     <span className="text-on-surface-variant text-xs font-label tracking-wider">{field.label}</span>
-                    <input
+                    <AutoInput
                       type={field.type}
                       placeholder={field.placeholder}
-                      value={customer[field.key as keyof typeof customer]}
+                      value={customer[field.key as keyof typeof customer] || ''}
                       onChange={(e) => setCustomer({...customer, [field.key]: e.target.value})}
-                      className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full text-sm font-medium p-0 transition-colors placeholder:text-on-surface-variant/50 text-on-surface"
+                      className="text-sm font-medium text-on-surface"
                     />
                   </div>
                 );
@@ -726,7 +768,7 @@ export default function QuotationForm() {
                       </div>
                       <button 
                         onClick={() => addSubItem(product.id)}
-                        className="text-[10px] text-primary hover:text-primary/80 flex items-center gap-1 print:hidden opacity-0 group-hover:opacity-100 transition-opacity"
+                        className={`text-[10px] text-primary hover:text-primary/80 flex items-center gap-1 print:hidden opacity-0 group-hover:opacity-100 transition-opacity ${(isExporting || isExportingPDF) ? '!hidden' : ''}`}
                       >
                         <PlusCircle className="w-3 h-3" /> Add Variant
                       </button>
@@ -815,7 +857,7 @@ export default function QuotationForm() {
                             <span>{formatNumber(subItem.qty * subItem.price)}</span>
                           </div>
 
-                          <div className="print:hidden">
+                          <div className={`print:hidden ${(isExporting || isExportingPDF) ? 'hidden' : ''}`}>
                             <button 
                               onClick={() => removeSubItem(product.id, subItem.id)}
                               className="text-outline hover:text-error transition-colors p-1 rounded-full hover:bg-error-container/50 opacity-0 group-hover/sub:opacity-100 focus:opacity-100"
@@ -833,7 +875,7 @@ export default function QuotationForm() {
               </div>
             </div>
 
-            <div className="mt-4 print:hidden">
+            <div className={`mt-4 print:hidden ${(isExporting || isExportingPDF) ? 'hidden' : ''}`}>
               <button 
                 onClick={addProduct}
                 className="flex items-center gap-2 text-primary font-label font-bold text-sm hover:bg-primary-container/10 transition-colors py-2 px-3 rounded-md -ml-3"
@@ -845,15 +887,16 @@ export default function QuotationForm() {
           </div>
 
           <div className="mt-0 mb-2 px-4 flex flex-col justify-end min-h-[40px] relative">
-            {/* Hidden div to calculate height for auto-expansion */}
-            <div className="invisible whitespace-pre-wrap text-center text-sm leading-[1.1] py-0 min-h-[1.1em] break-words">
+            {/* Div for display and export capture */}
+            <div className="whitespace-pre-wrap text-center text-sm leading-[1.1] py-0 min-h-[1.1em] break-words text-on-surface-variant">
               {footerNote || ' '}
             </div>
+            {/* Textarea for editing */}
             <textarea 
               value={footerNote}
               onChange={(e) => setFooterNote(e.target.value)}
               placeholder="Add a note here..."
-              className="absolute inset-0 w-full h-full bg-transparent border-none outline-none text-center text-sm text-on-surface-variant py-0 transition-colors placeholder:text-on-surface-variant/20 resize-none leading-[1.1] overflow-hidden"
+              className="absolute inset-0 w-full h-full bg-transparent border-none outline-none text-center text-sm text-on-surface-variant py-0 transition-colors placeholder:text-on-surface-variant/20 resize-none leading-[1.1] overflow-hidden opacity-0 focus:opacity-100 focus:z-10"
             />
           </div>
 
@@ -876,12 +919,11 @@ export default function QuotationForm() {
               <div className="flex justify-between items-center font-body text-on-surface-variant text-sm">
                 <div className="flex items-center gap-2">
                   <span>Sea Freight</span>
-                  <input 
-                    type="text" 
+                  <AutoInput
                     placeholder="(Manual Entry)" 
                     value={seaFreightNote}
                     onChange={(e) => setSeaFreightNote(e.target.value)}
-                    className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-32 text-sm text-on-surface-variant p-0 transition-colors placeholder:text-on-surface-variant/30"
+                    className="w-32 text-sm text-on-surface-variant"
                   />
                 </div>
                 <div className="flex items-center justify-end gap-0.5">

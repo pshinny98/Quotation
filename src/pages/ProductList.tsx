@@ -361,7 +361,7 @@ export default function ProductList() {
 
               {/* Product Details */}
               <div className="p-5 flex flex-col flex-1 gap-3">
-                <h3 className="text-lg font-headline font-bold text-on-surface line-clamp-2" title={product.desc}>
+                <h3 className="text-lg font-headline font-bold text-on-surface" title={product.desc}>
                   {product.desc || 'Unnamed Product'}
                 </h3>
 

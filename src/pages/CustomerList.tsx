@@ -390,7 +390,7 @@ export default function CustomerList() {
                       {allProductImages.length > 0 ? (
                         allProductImages.map((img, idx) => (
                           <div key={idx} className="w-16 h-16 rounded-lg overflow-hidden border border-outline-variant/30 bg-surface-container-high hover:border-primary transition-colors cursor-zoom-in group/img">
-                            <img src={img} alt="" className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-300" />
+                            <img src={img} alt="" className="w-full h-full object-contain group-hover/img:scale-110 transition-transform duration-300" />
                           </div>
                         ))
                       ) : (
