@@ -724,7 +724,7 @@ export default function QuotationForm() {
           {/* Product Table */}
           <div className="flex flex-col w-full overflow-x-auto">
             <div className="min-w-[800px]">
-              <div className="grid grid-cols-[100px_1fr_100px_32px_32px_32px_40px_45px_85px_85px_40px] print-grid gap-4 bg-secondary-container text-on-secondary-container px-4 py-3 text-xs font-label tracking-wider font-semibold text-center rounded-t-md">
+              <div className="grid grid-cols-[100px_1fr_100px_40px_40px_40px_45px_55px_95px_100px_40px] print-grid gap-2 bg-secondary-container text-on-secondary-container px-4 py-3 text-xs font-label tracking-wider font-semibold text-center rounded-t-md">
                 <div>Image</div>
                 <div>Description</div>
                 <div>Item</div>
@@ -785,7 +785,7 @@ export default function QuotationForm() {
 
                     <div className="flex flex-col justify-center gap-2 shrink-0">
                       {product.subItems.map((subItem) => (
-                        <div key={subItem.id} className="grid grid-cols-[100px_32px_32px_32px_40px_45px_85px_85px_40px] print-grid-subitem gap-4 items-center text-center group/sub">
+                        <div key={subItem.id} className="grid grid-cols-[100px_40px_40px_40px_45px_55px_95px_100px_40px] print-grid-subitem gap-2 items-center text-center group/sub">
                           
                           <div className="text-on-surface text-center">
                             <AutoTextarea 
@@ -841,14 +841,13 @@ export default function QuotationForm() {
                           </div>
 
                           <div className="flex items-center justify-center gap-0">
-                            <div className="flex items-center gap-0">
+                            <div className="flex items-center gap-0 w-full">
                               <span className="text-on-surface">$</span>
                               <input 
                                 type="number" 
                                 value={subItem.price || ''} 
                                 onChange={(e) => updateSubItem(product.id, subItem.id, 'price', parseFloat(e.target.value) || 0)}
-                                style={{ width: `${Math.max(1, String(subItem.price || '').length) + 0.5}ch` }}
-                                className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none text-left p-0 text-on-surface [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-[1ch]"
+                                className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none text-left p-0 text-on-surface [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none w-full"
                                 placeholder="0"
                               />
                             </div>
@@ -856,7 +855,7 @@ export default function QuotationForm() {
 
                           <div className="text-on-surface whitespace-nowrap flex items-center justify-center gap-0">
                             <span>$</span>
-                            <span>{formatNumber(subItem.qty * subItem.price)}</span>
+                            <span className="w-full text-right">{formatNumber(subItem.qty * subItem.price)}</span>
                           </div>
 
                           <div className={`print:hidden ${(isExporting || isExportingPDF) ? 'hidden' : ''}`}>
