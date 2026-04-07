@@ -724,7 +724,7 @@ export default function QuotationForm() {
           {/* Product Table */}
           <div className="flex flex-col w-full overflow-x-auto">
             <div className="min-w-[800px]">
-              <div className="grid grid-cols-[100px_1fr_100px_32px_32px_32px_40px_45px_80px_85px_40px] print-grid gap-4 bg-secondary-container text-on-secondary-container px-4 py-3 text-xs font-label tracking-wider font-semibold text-center rounded-t-md">
+              <div className="grid grid-cols-[100px_1fr_100px_32px_32px_32px_40px_45px_85px_85px_40px] print-grid gap-4 bg-secondary-container text-on-secondary-container px-4 py-3 text-xs font-label tracking-wider font-semibold text-center rounded-t-md">
                 <div>Image</div>
                 <div>Description</div>
                 <div>Item</div>
@@ -785,7 +785,7 @@ export default function QuotationForm() {
 
                     <div className="flex flex-col justify-center gap-2 shrink-0">
                       {product.subItems.map((subItem) => (
-                        <div key={subItem.id} className="grid grid-cols-[100px_32px_32px_32px_40px_45px_80px_85px_40px] print-grid-subitem gap-4 items-center text-center group/sub">
+                        <div key={subItem.id} className="grid grid-cols-[100px_32px_32px_32px_40px_45px_85px_85px_40px] print-grid-subitem gap-4 items-center text-center group/sub">
                           
                           <div className="text-on-surface text-center">
                             <AutoTextarea 
@@ -903,17 +903,17 @@ export default function QuotationForm() {
           </div>
 
           <div className="flex justify-end pt-6 border-t border-outline-variant/30">
-            <div className="w-fit min-w-[350px] flex flex-col gap-3">
+            <div className="w-fit min-w-[400px] flex flex-col gap-3">
               <div className="flex justify-between font-body text-on-surface-variant text-sm gap-8">
                 <span>Subtotal (EXW)</span>
-                <div className="flex items-center justify-end gap-0 font-medium text-on-surface">
+                <div className="flex items-center justify-end gap-0 font-medium text-on-surface min-w-[95px]">
                   <span>$</span>
                   <span>{formatNumber(subtotal)}</span>
                 </div>
               </div>
               <div className="flex justify-between font-body text-on-surface-variant text-sm gap-8">
                 <span>Total Volume</span>
-                <div className="flex items-center justify-end gap-1 font-medium text-on-surface">
+                <div className="flex items-center justify-end gap-1 font-medium text-on-surface min-w-[95px]">
                   <span>{totalVolume.toFixed(2)}</span>
                   <span className="text-on-surface-variant text-xs">CBM</span>
                 </div>
@@ -928,7 +928,7 @@ export default function QuotationForm() {
                     className="w-32 text-sm text-on-surface-variant"
                   />
                 </div>
-                <div className="flex items-center justify-end gap-0 shrink-0">
+                <div className="flex items-center justify-end gap-0 shrink-0 min-w-[95px]">
                   <div className="flex items-center gap-0">
                     <span className="text-on-surface">$</span>
                     <input 
@@ -944,7 +944,7 @@ export default function QuotationForm() {
               </div>
               <div className="flex justify-between font-headline font-bold text-primary mt-3 pt-3 border-t-2 border-primary-container text-lg gap-8">
                 <span>Grand Total</span>
-                <div className="flex items-center justify-end gap-0">
+                <div className="flex items-center justify-end gap-0 min-w-[95px]">
                   <span>$</span>
                   <span>{formatNumber(grandTotal)}</span>
                 </div>
