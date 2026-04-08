@@ -356,7 +356,7 @@ export default function CustomerList() {
                     {customer.website && (
                       <p className="flex items-center gap-2">
                         <Globe size={14} className="text-on-surface-variant" />
-                        <a href={customer.website.startsWith('http') ? customer.website : `https://${customer.website}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">
+                        <a href={customer.website.startsWith('http') ? customer.website : `https://${customer.website}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline whitespace-nowrap">
                           {customer.website}
                         </a>
                       </p>

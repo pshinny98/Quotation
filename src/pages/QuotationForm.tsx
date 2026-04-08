@@ -646,22 +646,22 @@ export default function QuotationForm() {
               </div>
             </div>
 
-            <div className="bg-surface-container-low p-6 rounded-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[200px_180px_150px_1fr] print:grid-cols-[200px_180px_150px_1fr] gap-x-12 gap-y-6">
+            <div className="bg-surface-container-low p-6 rounded-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[auto_180px_150px_1fr] print:grid-cols-[auto_180px_150px_1fr] gap-x-12 gap-y-6">
               <div className="flex flex-col gap-1">
                 <span className="text-on-surface-variant text-xs font-label tracking-wider">Website</span>
-                <span className="text-on-surface text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis">https://szjanus.en.alibaba.com</span>
+                <span className="text-on-surface text-sm font-medium whitespace-nowrap">https://szjanus.en.alibaba.com</span>
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-on-surface-variant text-xs font-label tracking-wider">Email</span>
-                <span className="text-on-surface text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis">info@janusfurniture.com</span>
+                <span className="text-on-surface text-sm font-medium whitespace-nowrap">info@janusfurniture.com</span>
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-on-surface-variant text-xs font-label tracking-wider">Tel</span>
-                <span className="text-on-surface text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis">+86 17608467876</span>
+                <span className="text-on-surface text-sm font-medium whitespace-nowrap">+86 17608467876</span>
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-on-surface-variant text-xs font-label tracking-wider">Address</span>
-                <span className="text-on-surface text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis">Guangdong, China, 518100</span>
+                <span className="text-on-surface text-sm font-medium whitespace-nowrap">Guangdong, China, 518100</span>
               </div>
             </div>
           </div>

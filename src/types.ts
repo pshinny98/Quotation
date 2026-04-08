@@ -74,6 +74,8 @@ export interface ProductVariant {
   sizeH: number;
   price: number;
   vol: number;
+  cost?: number;
+  factor?: number;
 }
 
 export interface Product {

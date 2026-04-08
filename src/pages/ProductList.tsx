@@ -18,6 +18,7 @@ export default function ProductList() {
   const [filterCategory, setFilterCategory] = useState<string>('All');
   const [filterSubcategory, setFilterSubcategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [exchangeRate, setExchangeRate] = useState<number>(7.2);
 
   // Find duplicates for the UI warning
   const duplicateImages = products.reduce((acc, p) => {
@@ -168,6 +169,14 @@ export default function ProductList() {
           if (field === 'sizeW' || field === 'sizeD' || field === 'sizeH') {
             updated.vol = ((updated.sizeW || 0) * (updated.sizeD || 0) * (updated.sizeH || 0)) / 1000000;
           }
+          // Auto-calculate price if cost or factor changes
+          if (field === 'cost' || field === 'factor') {
+            const cost = field === 'cost' ? (value as number) : (updated.cost || 0);
+            const factor = field === 'factor' ? (value as number) : (updated.factor || 1.2);
+            if (cost > 0) {
+              updated.price = Number(((cost * factor) / exchangeRate).toFixed(2));
+            }
+          }
           return updated;
         }
         return v;
@@ -294,6 +303,17 @@ export default function ProductList() {
           </div>
         )}
 
+        <div className="flex items-center gap-2 bg-surface-container-lowest px-3 py-2 rounded-lg border border-outline-variant/30">
+          <span className="text-xs font-bold text-on-surface-variant uppercase">Rate:</span>
+          <input
+            type="number"
+            value={exchangeRate}
+            onChange={(e) => setExchangeRate(parseFloat(e.target.value) || 7.2)}
+            className="w-16 bg-transparent outline-none text-sm font-bold text-primary"
+            step="0.01"
+          />
+        </div>
+
         {(filterCategory !== 'All' || filterSubcategory !== 'All' || searchQuery !== '') && (
           <button
             onClick={() => {
@@ -369,7 +389,12 @@ export default function ProductList() {
                   {product.variants?.map((variant, idx) => (
                     <div key={variant.id} className={`flex flex-col gap-1 pb-2 ${idx !== product.variants.length - 1 ? 'border-b border-outline-variant/20' : ''}`}>
                       <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-primary">{variant.itemName || 'Standard'}</span>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-primary">{variant.itemName || 'Standard'}</span>
+                          {variant.cost && (
+                            <span className="text-[10px] text-on-surface-variant">Cost: ¥{variant.cost} ({variant.factor}x)</span>
+                          )}
+                        </div>
                         <span className="text-sm font-bold text-on-surface">${variant.price.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between text-[11px] text-on-surface-variant">
@@ -528,7 +553,7 @@ export default function ProductList() {
                           </button>
                         )}
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="flex flex-col gap-1">
                             <label className="text-[10px] font-label text-on-surface-variant uppercase tracking-wider">Item Name / Variant</label>
                             <input
@@ -540,14 +565,34 @@ export default function ProductList() {
                             />
                           </div>
                           <div className="flex flex-col gap-1">
-                            <label className="text-[10px] font-label text-on-surface-variant uppercase tracking-wider">Price ($)</label>
+                            <label className="text-[10px] font-label text-on-surface-variant uppercase tracking-wider">Cost (RMB)</label>
                             <input
                               type="number"
-                              value={variant.price || ''}
-                              onChange={(e) => updateVariant(variant.id, 'price', parseFloat(e.target.value) || 0)}
+                              value={variant.cost || ''}
+                              onChange={(e) => updateVariant(variant.id, 'cost', parseFloat(e.target.value) || 0)}
                               className="bg-surface-container-lowest px-3 py-1.5 rounded-lg outline-none border border-transparent focus:border-primary transition-all text-sm"
                               placeholder="0.00"
                             />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[10px] font-label text-on-surface-variant uppercase tracking-wider">Factor / Price ($)</label>
+                            <div className="flex gap-2">
+                              <select
+                                value={variant.factor || 1.2}
+                                onChange={(e) => updateVariant(variant.id, 'factor', parseFloat(e.target.value))}
+                                className="bg-surface-container-lowest px-2 py-1.5 rounded-lg outline-none border border-transparent focus:border-primary transition-all text-sm"
+                              >
+                                <option value={1.2}>1.2x</option>
+                                <option value={1.3}>1.3x</option>
+                              </select>
+                              <input
+                                type="number"
+                                value={variant.price || ''}
+                                onChange={(e) => updateVariant(variant.id, 'price', parseFloat(e.target.value) || 0)}
+                                className="flex-1 bg-surface-container-lowest px-3 py-1.5 rounded-lg outline-none border border-transparent focus:border-primary transition-all text-sm font-bold text-primary"
+                                placeholder="0.00"
+                              />
+                            </div>
                           </div>
                         </div>
 
