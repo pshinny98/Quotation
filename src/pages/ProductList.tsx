@@ -381,10 +381,6 @@ export default function ProductList() {
 
               {/* Product Details */}
               <div className="p-5 flex flex-col flex-1 gap-3">
-                <h3 className="text-lg font-headline font-bold text-on-surface" title={product.desc}>
-                  {product.desc || 'Unnamed Product'}
-                </h3>
-
                 <div className="flex flex-col gap-2 mt-2">
                   {product.variants?.map((variant, idx) => (
                     <div key={variant.id} className={`flex flex-col gap-1 pb-2 ${idx !== product.variants.length - 1 ? 'border-b border-outline-variant/20' : ''}`}>
