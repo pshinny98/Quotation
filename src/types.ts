@@ -81,6 +81,7 @@ export interface ProductVariant {
 export interface Product {
   id?: string;
   productCode?: string;
+  supplier?: string;
   image: string;
   desc: string;
   category?: string;

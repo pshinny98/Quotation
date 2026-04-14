@@ -18,7 +18,7 @@ export default function ProductList() {
   const [filterCategory, setFilterCategory] = useState<string>('All');
   const [filterSubcategory, setFilterSubcategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [exchangeRate, setExchangeRate] = useState<number>(7.2);
+  const [exchangeRate, setExchangeRate] = useState<number>(6.8);
 
   // Find duplicates for the UI warning
   const duplicateImages = products.reduce((acc, p) => {
@@ -72,6 +72,7 @@ export default function ProductList() {
   // Form state
   const [formData, setFormData] = useState<Partial<Product>>({
     productCode: '',
+    supplier: '',
     desc: '',
     image: '',
     category: '',
@@ -108,6 +109,7 @@ export default function ProductList() {
       setEditingProduct(null);
       setFormData({
         productCode: '',
+        supplier: '',
         desc: '',
         image: '',
         category: '',
@@ -172,7 +174,7 @@ export default function ProductList() {
           // Auto-calculate price if cost or factor changes
           if (field === 'cost' || field === 'factor') {
             const cost = field === 'cost' ? (value as number) : (updated.cost || 0);
-            const factor = field === 'factor' ? (value as number) : (updated.factor || 1.2);
+            const factor = field === 'factor' ? (value as number) : (updated.factor || 1.3);
             if (cost > 0) {
               updated.price = Number(((cost * factor) / exchangeRate).toFixed(2));
             }
@@ -308,7 +310,7 @@ export default function ProductList() {
           <input
             type="number"
             value={exchangeRate}
-            onChange={(e) => setExchangeRate(parseFloat(e.target.value) || 7.2)}
+            onChange={(e) => setExchangeRate(parseFloat(e.target.value) || 6.8)}
             className="w-16 bg-transparent outline-none text-sm font-bold text-primary"
             step="0.01"
           />
@@ -405,6 +407,9 @@ export default function ProductList() {
                   {product.subcategory && (
                     <span className="text-primary font-medium">{product.subcategory}</span>
                   )}
+                  {product.supplier && (
+                    <span className="text-on-surface-variant italic">Supplier: {product.supplier}</span>
+                  )}
                   <div className="flex justify-between items-center">
                     <span>Last Quote: <strong className="text-on-surface">{product.latestQuoteRef}</strong></span>
                   </div>
@@ -444,27 +449,39 @@ export default function ProductList() {
               <form onSubmit={handleSave} className="p-6 overflow-y-auto flex flex-col gap-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Image Upload */}
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm font-medium text-on-surface-variant">Product Image</label>
-                    <div className="relative h-48 bg-surface-container-low rounded-xl border-2 border-dashed border-outline-variant/30 flex items-center justify-center overflow-hidden group">
-                      {formData.image ? (
-                        <>
-                          <img src={formData.image} alt="Preview" className="w-full h-full object-contain" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <label className="cursor-pointer bg-surface-container-lowest text-primary px-4 py-2 rounded-lg font-medium flex items-center gap-2">
-                              <Upload size={18} />
-                              Change
-                              <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                            </label>
-                          </div>
-                        </>
-                      ) : (
-                        <label className="cursor-pointer flex flex-col items-center gap-2 text-on-surface-variant hover:text-primary transition-colors">
-                          <Upload size={32} />
-                          <span className="font-medium">Upload Image</span>
-                          <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                        </label>
-                      )}
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-medium text-on-surface-variant">Product Image</label>
+                      <div className="relative h-48 bg-surface-container-low rounded-xl border-2 border-dashed border-outline-variant/30 flex items-center justify-center overflow-hidden group">
+                        {formData.image ? (
+                          <>
+                            <img src={formData.image} alt="Preview" className="w-full h-full object-contain" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <label className="cursor-pointer bg-surface-container-lowest text-primary px-4 py-2 rounded-lg font-medium flex items-center gap-2">
+                                <Upload size={18} />
+                                Change
+                                <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                              </label>
+                            </div>
+                          </>
+                        ) : (
+                          <label className="cursor-pointer flex flex-col items-center gap-2 text-on-surface-variant hover:text-primary transition-colors">
+                            <Upload size={32} />
+                            <span className="font-medium">Upload Image</span>
+                            <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Supplier</label>
+                      <input
+                        type="text"
+                        value={formData.supplier}
+                        onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
+                        className="bg-surface-container-low px-4 py-2 rounded-lg outline-none focus:ring-2 focus:ring-primary/20 border border-transparent focus:border-primary transition-all"
+                        placeholder="Enter supplier name"
+                      />
                     </div>
                   </div>
 
@@ -574,7 +591,7 @@ export default function ProductList() {
                             <label className="text-[10px] font-label text-on-surface-variant uppercase tracking-wider">Factor / Price ($)</label>
                             <div className="flex gap-2">
                               <select
-                                value={variant.factor || 1.2}
+                                value={variant.factor || 1.3}
                                 onChange={(e) => updateVariant(variant.id, 'factor', parseFloat(e.target.value))}
                                 className="bg-surface-container-lowest px-2 py-1.5 rounded-lg outline-none border border-transparent focus:border-primary transition-all text-sm"
                               >
