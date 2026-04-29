@@ -4,7 +4,7 @@ import { db, auth } from '../firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { Customer, Quotation } from '../types';
 import { Link } from 'react-router-dom';
-import { Users, FileText, Plus, Edit2, Trash2, X, Mail, Phone, MapPin, Camera, User, Globe, Linkedin, Facebook, MessageCircle, Flag, Filter, Calendar, Search, ShoppingBag, Copy, Check, Send } from 'lucide-react';
+import { Users, FileText, Plus, Edit2, Trash2, X, Mail, Phone, MapPin, Camera, User, Globe, Linkedin, Facebook, MessageCircle, Flag, Filter, Calendar, Search, ShoppingBag, Copy, Check, Send, Link2, FilePlus, FolderOpen } from 'lucide-react';
 
 export default function CustomerList() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -26,6 +26,8 @@ export default function CustomerList() {
     whatsapp: '',
     alibaba: '',
     website: '',
+    productLink: '',
+    localPath: '',
     notes: ''
   });
   const [copiedText, setCopiedText] = useState<string | null>(null);
@@ -92,6 +94,8 @@ export default function CustomerList() {
         whatsapp: customer.whatsapp || '',
         alibaba: customer.alibaba || '',
         website: customer.website || '',
+        productLink: customer.productLink || '',
+        localPath: customer.localPath || '',
         notes: customer.notes || ''
       });
     } else {
@@ -110,6 +114,8 @@ export default function CustomerList() {
         whatsapp: '',
         alibaba: '',
         website: '',
+        productLink: '',
+        localPath: '',
         notes: ''
       });
     }
@@ -335,6 +341,13 @@ export default function CustomerList() {
                       </div>
                     </div>
                     <div className="flex gap-1">
+                      <Link
+                        to={`/quotations/new?customerId=${customer.id}`}
+                        className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-full transition-colors"
+                        title="Draft Quote"
+                      >
+                        <FilePlus size={14} />
+                      </Link>
                       <button
                         onClick={() => handleOpenModal(customer)}
                         className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-full transition-colors"
@@ -458,6 +471,31 @@ export default function CustomerList() {
                       <a href={customer.alibaba.startsWith('http') ? customer.alibaba : `https://${customer.alibaba}`} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-surface-container-low rounded-md hover:text-primary hover:bg-primary/5 transition-all" title="Alibaba">
                         <ShoppingBag size={14} />
                       </a>
+                    )}
+                    {customer.productLink && (
+                      <a href={customer.productLink.startsWith('http') ? customer.productLink : `https://${customer.productLink}`} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-surface-container-low rounded-md hover:text-primary hover:bg-primary/5 transition-all" title="Customer's Request Product">
+                        <Link2 size={14} />
+                      </a>
+                    )}
+                    {customer.localPath && (
+                      <div className="relative group/path">
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText(customer.localPath!);
+                            setCopiedText(customer.localPath!);
+                          }}
+                          className="p-1.5 bg-surface-container-low rounded-md hover:text-primary hover:bg-primary/5 transition-all"
+                          title={`Click to copy path: ${customer.localPath}`}
+                        >
+                          <FolderOpen size={14} />
+                        </button>
+                        {copiedText === customer.localPath && (
+                          <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-surface-container-highest text-on-surface text-[10px] px-2 py-1 rounded shadow-lg whitespace-nowrap z-10 border border-outline-variant">
+                            Path Copied! <br/>
+                            Use Cmd+Shift+G in Finder
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -666,6 +704,28 @@ export default function CustomerList() {
                       onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
                       className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
                       placeholder="Number or URL"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Product Link (Request)</label>
+                    <input
+                      type="text"
+                      value={formData.productLink}
+                      onChange={(e) => setFormData({ ...formData, productLink: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="URL of product the customer wants"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Local Folder Path</label>
+                    <input
+                      type="text"
+                      value={formData.localPath}
+                      onChange={(e) => setFormData({ ...formData, localPath: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="e.g. /Users/Name/Documents/ClientA"
                     />
                   </div>
                 </div>

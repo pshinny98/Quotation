@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Image as ImageIcon, X, PlusCircle, Save, Trash2, Download, Library, Search } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { collection, doc, setDoc, getDoc, addDoc, deleteDoc, query, where, onSnapshot } from 'firebase/firestore';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
@@ -77,6 +77,7 @@ const AutoInput = ({ value, onChange, placeholder, className, type = "text" }: {
 export default function QuotationForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const quotationRef = useRef<HTMLDivElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -240,8 +241,27 @@ export default function QuotationForm() {
       const currentSeq = parseInt(localStorage.getItem(storageKey) || '1', 10);
 
       setQuoteRef(`JF${dateString}${currentSeq}`);
+
+      // Check for customerId in query params
+      const searchParams = new URLSearchParams(location.search);
+      const customerId = searchParams.get('customerId');
+      if (customerId) {
+        getDoc(doc(db, 'customers', customerId)).then((docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setCustomer({
+              name: data.name || '',
+              email: data.email || '',
+              tel: data.tel || '',
+              address: data.address || ''
+            });
+          }
+        }).catch(err => {
+          console.error("Error loading customer for draft:", err);
+        });
+      }
     }
-  }, [id]);
+  }, [id, location.search]);
 
   const handleExportPDF = async () => {
     if (!quotationRef.current) return;

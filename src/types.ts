@@ -58,6 +58,8 @@ export interface Customer {
   whatsapp?: string;
   alibaba?: string;
   website?: string;
+  productLink?: string;
+  localPath?: string;
   userId: string;
   latestQuoteRef: string;
   latestQuoteDate: string;
