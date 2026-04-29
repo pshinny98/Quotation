@@ -286,91 +286,50 @@ export default function CustomerList() {
         )}
       </div>
 
-      <div className="grid gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {Object.keys(groupedCustomers).length === 0 ? (
-          <div className="bg-surface-container-lowest p-8 rounded-lg text-center text-on-surface-variant shadow-[0_4px_24px_rgba(0,42,88,0.04)]">
+          <div className="col-span-full bg-surface-container-lowest p-8 rounded-lg text-center text-on-surface-variant shadow-sm">
             No customers found. Save a quotation or add a customer manually.
           </div>
         ) : (
           (Object.values(groupedCustomers) as Customer[][]).map((customerGroup) => {
-            // Use the first customer in the group as the primary display
             const customer = customerGroup[0];
-            
-            // Collect all quotations for all customers in this group (same name)
             const customerQuotes = quotations
               .filter(q => q.customer.name.toLowerCase() === customer.name.toLowerCase())
               .sort((a, b) => b.createdAt - a.createdAt);
 
-            // Collect all product images from all customers in this group AND their quotations
             const quoteImages = customerQuotes.flatMap(q => q.items.map(i => i.image)).filter(Boolean);
             const allProductImages = Array.from(new Set([
               ...customerGroup.flatMap(c => c.productImages || []),
               ...quoteImages
-            ]));
+            ])).slice(0, 4); // Limit to 4 images in small view
 
             return (
-              <div key={customer.id} className="bg-surface-container-lowest rounded-lg shadow-[0_4px_24px_rgba(0,42,88,0.04)] overflow-hidden flex flex-col md:flex-row">
-                {/* Customer Info */}
-                <div className="p-6 md:w-1/3 bg-surface-container-low/30 border-r border-outline-variant/30 flex flex-col gap-4">
+              <div key={customer.id} className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 flex flex-col hover:shadow-md transition-shadow">
+                {/* Compact Header */}
+                <div className="p-4 flex flex-col gap-3 flex-1">
                   <div className="flex justify-between items-start">
-                    <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 rounded-full overflow-hidden bg-surface-container-high border-2 border-primary/20 flex-shrink-0">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-container-high border border-primary/20 flex-shrink-0">
                         {customer.avatar ? (
                           <img src={customer.avatar} alt={customer.name} className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-primary/30">
-                            <User size={32} />
+                            <User size={24} />
                           </div>
                         )}
                       </div>
-                      <div>
-                        <h2 className="text-xl font-headline font-bold text-on-surface leading-tight">{customer.name}</h2>
-                        {customer.companyName && (
-                          <p className="text-sm font-medium text-primary italic mb-1">{customer.companyName}</p>
-                        )}
-                        <div className="flex flex-col gap-1 mt-1">
-                          <div className="flex items-center gap-2 text-sm text-on-surface-variant group/email">
-                            <Mail size={14} className="flex-shrink-0" />
-                            <a href={`mailto:${customer.email}`} className="hover:text-primary transition-colors truncate max-w-[180px]">
-                              {customer.email || 'No email'}
-                            </a>
-                            {customer.email && (
-                              <button 
-                                onClick={() => {
-                                  navigator.clipboard.writeText(customer.email);
-                                  setCopiedText(customer.email);
-                                }}
-                                className="opacity-0 group-hover/email:opacity-100 transition-opacity p-1 hover:bg-primary/10 rounded"
-                                title="Copy Email"
-                              >
-                                {copiedText === customer.email ? <Check size={12} className="text-primary" /> : <Copy size={12} />}
-                              </button>
-                            )}
-                            {copiedText === customer.email && (
-                              <span className="text-[10px] text-primary font-bold animate-pulse">Copied!</span>
-                            )}
-                          </div>
-                          
-                          {customer.email2 && (
-                            <div className="flex items-center gap-2 text-sm text-on-surface-variant group/email2">
-                              <Mail size={14} className="flex-shrink-0" />
-                              <a href={`mailto:${customer.email2}`} className="hover:text-primary transition-colors truncate max-w-[180px]" title="Secondary Email">
-                                {customer.email2}
-                              </a>
-                              <button 
-                                onClick={() => {
-                                  navigator.clipboard.writeText(customer.email2!);
-                                  setCopiedText(customer.email2!);
-                                }}
-                                className="opacity-0 group-hover/email2:opacity-100 transition-opacity p-1 hover:bg-primary/10 rounded"
-                                title="Copy Secondary Email"
-                              >
-                                {copiedText === customer.email2 ? <Check size={12} className="text-primary" /> : <Copy size={12} />}
-                              </button>
-                              {copiedText === customer.email2 && (
-                                <span className="text-[10px] text-primary font-bold animate-pulse">Copied!</span>
-                              )}
-                            </div>
+                      <div className="min-w-0 flex-1">
+                        <h2 className="text-base font-headline font-bold text-on-surface leading-none truncate" title={customer.name}>{customer.name}</h2>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+                          {customer.companyName && (
+                            <p className="text-xs font-semibold text-primary truncate" title={customer.companyName}>{customer.companyName}</p>
+                          )}
+                          {customer.country && (
+                            <span className="flex items-center gap-0.5 text-[10px] font-bold text-on-surface-variant uppercase tracking-tighter bg-surface-container-high px-1.5 py-0.5 rounded border border-outline-variant/30">
+                              <Flag size={10} className="text-primary" />
+                              {customer.country}
+                            </span>
                           )}
                         </div>
                       </div>
@@ -378,127 +337,151 @@ export default function CustomerList() {
                     <div className="flex gap-1">
                       <button
                         onClick={() => handleOpenModal(customer)}
-                        className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-full transition-colors"
-                        title="Edit Customer"
+                        className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-full transition-colors"
+                        title="Edit"
                       >
-                        <Edit2 size={16} />
+                        <Edit2 size={14} />
                       </button>
                       <button
                         onClick={() => handleDelete(customer.id!)}
-                        className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-full transition-colors"
-                        title="Delete Customer"
+                        className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-full transition-colors"
+                        title="Delete"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   </div>
-                  <div className="text-sm flex flex-col gap-2">
-                    {customer.country && (
-                      <p className="flex items-center gap-2">
-                        <Flag size={14} className="text-on-surface-variant" />
-                        <strong className="text-on-surface font-medium">Country:</strong> {customer.country}
-                      </p>
-                    )}
-                    <p className="flex items-center gap-2">
-                      <Phone size={14} className="text-on-surface-variant" />
-                      <strong className="text-on-surface font-medium">Tel:</strong> {customer.tel || 'N/A'}
-                    </p>
-                    <p className="flex items-start gap-2">
-                      <MapPin size={14} className="text-on-surface-variant mt-1" />
-                      <span className="flex-1">
-                        <strong className="text-on-surface font-medium">Address:</strong> {customer.address || 'N/A'}
-                      </span>
-                    </p>
-                    {customer.notes && (
-                      <div className="mt-2 p-2 bg-surface-container-lowest rounded border border-outline-variant/30 text-xs text-on-surface-variant italic">
-                        <strong className="text-on-surface font-medium not-italic block mb-1">Notes:</strong>
-                        {customer.notes}
+
+                  {/* Quick Contacts */}
+                  <div className="space-y-1.5 border-b border-outline-variant/10 pb-3">
+                    <div className="flex items-center gap-2 text-xs text-on-surface-variant group/email">
+                      <Mail size={12} className="flex-shrink-0 text-primary" />
+                      <a href={`mailto:${customer.email}`} className="hover:text-primary transition-colors truncate font-medium">
+                        {customer.email || 'No email'}
+                      </a>
+                      <div className="ml-auto flex items-center gap-1">
+                        {customer.email && (
+                          <>
+                            <button 
+                              onClick={() => {
+                                navigator.clipboard.writeText(customer.email);
+                                setCopiedText(customer.email);
+                              }}
+                              className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
+                              title="Copy Email"
+                            >
+                              {copiedText === customer.email ? <Check size={10} className="text-success" /> : <Copy size={10} className="opacity-0 group-hover/email:opacity-100" />}
+                            </button>
+                            <button 
+                              onClick={() => window.open(`https://mail.zoho.com/zm/#mail/compose/${customer.email}`, '_blank')}
+                              className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
+                              title="Compose in Zoho Mail"
+                            >
+                              <Mail size={10} className="opacity-0 group-hover/email:opacity-100" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {customer.email2 && (
+                      <div className="flex items-center gap-2 text-xs text-on-surface-variant group/email2">
+                        <Mail size={12} className="flex-shrink-0 text-primary opacity-60" />
+                        <a href={`mailto:${customer.email2}`} className="hover:text-primary transition-colors truncate italic">
+                          {customer.email2}
+                        </a>
+                        <div className="ml-auto flex items-center gap-1">
+                          <button 
+                            onClick={() => {
+                              navigator.clipboard.writeText(customer.email2!);
+                              setCopiedText(customer.email2!);
+                            }}
+                            className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
+                            title="Copy Secondary Email"
+                          >
+                            {copiedText === customer.email2 ? <Check size={10} className="text-success" /> : <Copy size={10} className="opacity-0 group-hover/email2:opacity-100" />}
+                          </button>
+                          <button 
+                            onClick={() => window.open(`https://mail.zoho.com/zm/#mail/compose/${customer.email2}`, '_blank')}
+                            className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
+                            title="Compose in Zoho Mail"
+                          >
+                            <Mail size={10} className="opacity-0 group-hover/email2:opacity-100" />
+                          </button>
+                        </div>
                       </div>
                     )}
-                    {customer.website && (
-                      <p className="flex items-center gap-2">
-                        <Globe size={14} className="text-on-surface-variant" />
-                        <a href={customer.website.startsWith('http') ? customer.website : `https://${customer.website}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline whitespace-nowrap">
-                          {customer.website}
-                        </a>
-                      </p>
+                    {customer.tel && (
+                      <div className="flex items-center gap-2 text-xs text-on-surface font-medium">
+                        <Phone size={12} className="flex-shrink-0 text-primary" />
+                        <span>{customer.tel}</span>
+                      </div>
                     )}
-                    <div className="flex gap-3 mt-1 items-center">
-                      {customer.linkedin && (
-                        <a href={customer.linkedin.startsWith('http') ? customer.linkedin : `https://${customer.linkedin}`} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors" title="LinkedIn">
-                          <Linkedin size={18} />
-                        </a>
-                      )}
-                      {customer.facebook && (
-                        <a href={customer.facebook.startsWith('http') ? customer.facebook : `https://${customer.facebook}`} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors" title="Facebook">
-                          <Facebook size={18} />
-                        </a>
-                      )}
-                      {customer.whatsapp && (
-                        <a href={`https://wa.me/${customer.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors" title="WhatsApp">
-                          <MessageCircle size={18} />
-                        </a>
-                      )}
-                      {customer.alibaba && (
-                        <a href={customer.alibaba.startsWith('http') ? customer.alibaba : `https://${customer.alibaba}`} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors" title="Alibaba">
-                          <ShoppingBag size={18} />
-                        </a>
-                      )}
-                    </div>
                   </div>
-                  <div className="mt-2">
-                    <strong className="text-sm text-on-surface font-medium block mb-3">Product Groups:</strong>
-                    <div className="flex flex-wrap gap-2">
-                      {allProductImages.length > 0 ? (
-                        allProductImages.map((img, idx) => (
-                          <div key={idx} className="w-16 h-16 rounded-lg overflow-hidden border border-outline-variant/30 bg-surface-container-high hover:border-primary transition-colors cursor-zoom-in group/img">
-                            <img src={img} alt="" className="w-full h-full object-contain group-hover/img:scale-110 transition-transform duration-300" />
+
+                  {/* Social/Web Links */}
+                  <div className="flex flex-wrap gap-2 py-1 border-b border-outline-variant/10">
+                    {customer.website && (
+                      <a href={customer.website.startsWith('http') ? customer.website : `https://${customer.website}`} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-surface-container-low rounded-md hover:text-primary hover:bg-primary/5 transition-all" title="Website">
+                        <Globe size={14} />
+                      </a>
+                    )}
+                    {customer.linkedin && (
+                      <a href={customer.linkedin.startsWith('http') ? customer.linkedin : `https://${customer.linkedin}`} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-surface-container-low rounded-md hover:text-primary hover:bg-primary/5 transition-all" title="LinkedIn">
+                        <Linkedin size={14} />
+                      </a>
+                    )}
+                    {customer.facebook && (
+                      <a href={customer.facebook.startsWith('http') ? customer.facebook : `https://${customer.facebook}`} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-surface-container-low rounded-md hover:text-primary hover:bg-primary/5 transition-all" title="Facebook">
+                        <Facebook size={14} />
+                      </a>
+                    )}
+                    {customer.whatsapp && (
+                      <a href={`https://wa.me/${customer.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-surface-container-low rounded-md hover:text-primary hover:bg-primary/5 transition-all" title="WhatsApp">
+                        <MessageCircle size={14} />
+                      </a>
+                    )}
+                    {customer.alibaba && (
+                      <a href={customer.alibaba.startsWith('http') ? customer.alibaba : `https://${customer.alibaba}`} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-surface-container-low rounded-md hover:text-primary hover:bg-primary/5 transition-all" title="Alibaba">
+                        <ShoppingBag size={14} />
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Product Mini Gallery */}
+                  {allProductImages.length > 0 && (
+                    <div className="mt-1">
+                      <p className="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Products</p>
+                      <div className="flex gap-1.5 overflow-hidden">
+                        {allProductImages.slice(0, 5).map((img, idx) => (
+                          <div key={idx} className="w-12 h-12 rounded-lg border border-outline-variant/20 overflow-hidden flex-shrink-0 bg-white shadow-sm">
+                            <img src={img} alt="" className="w-full h-full object-contain" />
                           </div>
-                        ))
-                      ) : (
-                        <span className="text-xs text-on-surface-variant italic">No images available</span>
-                      )}
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
-                {/* Quotation History */}
-                <div className="p-6 md:w-2/3 flex flex-col">
-                  <h3 className="text-sm font-headline font-bold uppercase tracking-wider text-on-surface-variant mb-4 flex items-center gap-2">
-                    <FileText size={16} />
-                    Quotation History
+                {/* Quotation Mini List */}
+                <div className="bg-surface-container-low/40 p-3 mt-auto border-t border-outline-variant/30">
+                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2 flex justify-between">
+                    <span>Recent Quotes</span>
+                    <span className="text-primary">{customerQuotes.length} total</span>
                   </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead>
-                        <tr className="border-b border-outline-variant/30 text-on-surface-variant font-label">
-                          <th className="pb-2 font-medium">Ref</th>
-                          <th className="pb-2 font-medium">Date</th>
-                          <th className="pb-2 font-medium">Total</th>
-                          <th className="pb-2 font-medium text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-outline-variant/10">
-                        {customerQuotes.length > 0 ? (
-                          customerQuotes.map(quote => (
-                            <tr key={quote.id} className="hover:bg-surface-container-low/50 transition-colors">
-                              <td className="py-3 font-medium text-primary">{quote.quoteRef}</td>
-                              <td className="py-3 text-on-surface">{quote.quoteDate}</td>
-                              <td className="py-3 text-on-surface">${quote.grandTotal.toLocaleString()}</td>
-                              <td className="py-3 text-right">
-                                <Link to={`/quotations/${quote.id}`} className="text-primary hover:underline font-medium text-xs">
-                                  View
-                                </Link>
-                              </td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan={4} className="py-4 text-center text-on-surface-variant italic">No quotations found.</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                  <div className="space-y-1 max-h-24 overflow-y-auto scrollbar-thin">
+                    {customerQuotes.length > 0 ? (
+                      customerQuotes.slice(0, 3).map(quote => (
+                        <div key={quote.id} className="flex justify-between items-center text-[11px] bg-white/50 p-1.5 rounded border border-black/5 hover:border-primary/30 transition-colors">
+                          <span className="font-medium text-primary">{quote.quoteRef}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-on-surface-variant font-mono">${Math.round(quote.grandTotal).toLocaleString()}</span>
+                            <Link to={`/quotations/${quote.id}`} className="text-primary hover:underline font-bold px-1 py-0.5 bg-primary/5 rounded">View</Link>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-[10px] text-on-surface-variant italic py-1">No history yet</p>
+                    )}
                   </div>
                 </div>
               </div>
