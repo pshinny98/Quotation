@@ -46,7 +46,9 @@ export interface Quotation {
 export interface Customer {
   id?: string;
   name: string;
+  companyName?: string;
   email: string;
+  email2?: string;
   tel: string;
   address: string;
   avatar?: string;

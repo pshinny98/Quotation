@@ -4,7 +4,7 @@ import { db, auth } from '../firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { Customer, Quotation } from '../types';
 import { Link } from 'react-router-dom';
-import { Users, FileText, Plus, Edit2, Trash2, X, Mail, Phone, MapPin, Camera, User, Globe, Linkedin, Facebook, MessageCircle, Flag, Filter, Calendar, Search, ShoppingBag } from 'lucide-react';
+import { Users, FileText, Plus, Edit2, Trash2, X, Mail, Phone, MapPin, Camera, User, Globe, Linkedin, Facebook, MessageCircle, Flag, Filter, Calendar, Search, ShoppingBag, Copy, Check } from 'lucide-react';
 
 export default function CustomerList() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -14,7 +14,9 @@ export default function CustomerList() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [formData, setFormData] = useState({
     name: '',
+    companyName: '',
     email: '',
+    email2: '',
     tel: '',
     address: '',
     avatar: '',
@@ -22,8 +24,18 @@ export default function CustomerList() {
     linkedin: '',
     facebook: '',
     whatsapp: '',
-    website: ''
+    alibaba: '',
+    website: '',
+    notes: ''
   });
+  const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (copiedText) {
+      const timer = setTimeout(() => setCopiedText(null), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [copiedText]);
 
   const [selectedCountry, setSelectedCountry] = useState<string>('All');
   const [selectedMonth, setSelectedMonth] = useState<string>('All');
@@ -68,7 +80,9 @@ export default function CustomerList() {
       setEditingCustomer(customer);
       setFormData({
         name: customer.name,
+        companyName: customer.companyName || '',
         email: customer.email,
+        email2: customer.email2 || '',
         tel: customer.tel,
         address: customer.address,
         avatar: customer.avatar || '',
@@ -84,7 +98,9 @@ export default function CustomerList() {
       setEditingCustomer(null);
       setFormData({
         name: '',
+        companyName: '',
         email: '',
+        email2: '',
         tel: '',
         address: '',
         avatar: '',
@@ -179,7 +195,9 @@ export default function CustomerList() {
     
     const searchMatch = searchQuery === '' || 
       customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (customer.companyName && customer.companyName.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (customer.email && customer.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (customer.email2 && customer.email2.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (customer.tel && customer.tel.includes(searchQuery));
 
     return countryMatch && monthMatch && searchMatch;
@@ -306,11 +324,55 @@ export default function CustomerList() {
                         )}
                       </div>
                       <div>
-                        <h2 className="text-xl font-headline font-bold text-on-surface">{customer.name}</h2>
-                        <p className="text-sm text-on-surface-variant mt-1 flex items-center gap-2">
-                          <Mail size={14} />
-                          {customer.email || 'No email'}
-                        </p>
+                        <h2 className="text-xl font-headline font-bold text-on-surface leading-tight">{customer.name}</h2>
+                        {customer.companyName && (
+                          <p className="text-sm font-medium text-primary italic mb-1">{customer.companyName}</p>
+                        )}
+                        <div className="flex flex-col gap-1 mt-1">
+                          <div className="flex items-center gap-2 text-sm text-on-surface-variant group/email">
+                            <Mail size={14} className="flex-shrink-0" />
+                            <a href={`mailto:${customer.email}`} className="hover:text-primary transition-colors truncate max-w-[180px]">
+                              {customer.email || 'No email'}
+                            </a>
+                            {customer.email && (
+                              <button 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(customer.email);
+                                  setCopiedText(customer.email);
+                                }}
+                                className="opacity-0 group-hover/email:opacity-100 transition-opacity p-1 hover:bg-primary/10 rounded"
+                                title="Copy Email"
+                              >
+                                {copiedText === customer.email ? <Check size={12} className="text-primary" /> : <Copy size={12} />}
+                              </button>
+                            )}
+                            {copiedText === customer.email && (
+                              <span className="text-[10px] text-primary font-bold animate-pulse">Copied!</span>
+                            )}
+                          </div>
+                          
+                          {customer.email2 && (
+                            <div className="flex items-center gap-2 text-sm text-on-surface-variant group/email2">
+                              <Mail size={14} className="flex-shrink-0" />
+                              <a href={`mailto:${customer.email2}`} className="hover:text-primary transition-colors truncate max-w-[180px]" title="Secondary Email">
+                                {customer.email2}
+                              </a>
+                              <button 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(customer.email2!);
+                                  setCopiedText(customer.email2!);
+                                }}
+                                className="opacity-0 group-hover/email2:opacity-100 transition-opacity p-1 hover:bg-primary/10 rounded"
+                                title="Copy Secondary Email"
+                              >
+                                {copiedText === customer.email2 ? <Check size={12} className="text-primary" /> : <Copy size={12} />}
+                              </button>
+                              {copiedText === customer.email2 && (
+                                <span className="text-[10px] text-primary font-bold animate-pulse">Copied!</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="flex gap-1">
@@ -489,7 +551,44 @@ export default function CustomerList() {
                       placeholder="e.g. John Doe"
                     />
                   </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Company Name</label>
+                    <input
+                      type="text"
+                      value={formData.companyName}
+                      onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="e.g. Acme Corp"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Email Address 1</label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="e.g. john@example.com"
+                    />
+                  </div>
                   
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Email Address 2 (Backup)</label>
+                    <input
+                      type="email"
+                      value={formData.email2}
+                      onChange={(e) => setFormData({ ...formData, email2: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="e.g. j.doe@work.com"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Country</label>
                     <input
@@ -500,20 +599,7 @@ export default function CustomerList() {
                       placeholder="e.g. USA"
                     />
                   </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Email Address</label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
-                      placeholder="e.g. john@example.com"
-                    />
-                  </div>
-                  
+
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Telephone</label>
                     <input
@@ -528,17 +614,6 @@ export default function CustomerList() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">WhatsApp</label>
-                    <input
-                      type="text"
-                      value={formData.whatsapp}
-                      onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
-                      placeholder="e.g. +1 234 567 890"
-                    />
-                  </div>
-                  
-                  <div className="flex flex-col gap-1">
                     <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Website</label>
                     <input
                       type="text"
@@ -546,6 +621,17 @@ export default function CustomerList() {
                       onChange={(e) => setFormData({ ...formData, website: e.target.value })}
                       className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
                       placeholder="e.g. www.example.com"
+                    />
+                  </div>
+                  
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Alibaba</label>
+                    <input
+                      type="text"
+                      value={formData.alibaba}
+                      onChange={(e) => setFormData({ ...formData, alibaba: e.target.value })}
+                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      placeholder="Profile or Store URL"
                     />
                   </div>
                 </div>
@@ -576,24 +662,13 @@ export default function CustomerList() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">WhatsApp (Icon Link)</label>
+                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">WhatsApp</label>
                     <input
                       type="text"
                       value={formData.whatsapp}
                       onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
                       className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
                       placeholder="Number or URL"
-                    />
-                  </div>
-                  
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Alibaba</label>
-                    <input
-                      type="text"
-                      value={formData.alibaba}
-                      onChange={(e) => setFormData({ ...formData, alibaba: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
-                      placeholder="Profile or Store URL"
                     />
                   </div>
                 </div>
