@@ -4,7 +4,7 @@ import { db, auth } from '../firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { Customer, Quotation } from '../types';
 import { Link } from 'react-router-dom';
-import { Users, FileText, Plus, Edit2, Trash2, X, Mail, Phone, MapPin, Camera, User, Globe, Linkedin, Facebook, MessageCircle, Flag, Filter, Calendar, Search, ShoppingBag, Copy, Check, Send, Link2, FilePlus, FolderOpen } from 'lucide-react';
+import { Users, FileText, Plus, Edit2, Trash2, X, Mail, Phone, MapPin, Camera, User, Globe, Linkedin, Facebook, MessageCircle, Flag, Filter, Calendar, Search, ShoppingBag, Copy, Check, Send, Link2, FilePlus, FolderOpen, Package } from 'lucide-react';
 
 export default function CustomerList() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -31,6 +31,7 @@ export default function CustomerList() {
     notes: ''
   });
   const [copiedText, setCopiedText] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ url: string; code?: string; desc?: string } | null>(null);
 
   useEffect(() => {
     if (copiedText) {
@@ -285,7 +286,7 @@ export default function CustomerList() {
               setSelectedMonth('All');
               setSearchQuery('');
             }}
-            className="text-xs font-bold text-primary hover:underline uppercase tracking-wider px-2"
+            className="text-xs font-bold text-primary hover:underline px-2"
           >
             Clear Filters
           </button>
@@ -304,11 +305,34 @@ export default function CustomerList() {
               .filter(q => q.customer.name.toLowerCase() === customer.name.toLowerCase())
               .sort((a, b) => b.createdAt - a.createdAt);
 
-            const quoteImages = customerQuotes.flatMap(q => q.items.map(i => i.image)).filter(Boolean);
-            const allProductImages = Array.from(new Set([
-              ...customerGroup.flatMap(c => c.productImages || []),
-              ...quoteImages
-            ])).slice(0, 4); // Limit to 4 images in small view
+            const allProductInfos: { url: string; code?: string; desc?: string }[] = [];
+            
+            // Add images from quotations with their codes/descriptions
+            customerQuotes.forEach(q => {
+              q.items.forEach(item => {
+                if (item.image) {
+                  // Avoid duplicates
+                  if (!allProductInfos.find(info => info.url === item.image)) {
+                    allProductInfos.push({
+                      url: item.image,
+                      code: item.productCode,
+                      desc: item.desc
+                    });
+                  }
+                }
+              });
+            });
+
+            // Add images from customer profile if any (these might not be linked to specific products)
+            customerGroup.forEach(c => {
+              (c.productImages || []).forEach(img => {
+                if (!allProductInfos.find(info => info.url === img)) {
+                  allProductInfos.push({ url: img });
+                }
+              });
+            });
+
+            const displayedProducts = allProductInfos.slice(0, 5);
 
             return (
               <div key={customer.id} className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 flex flex-col hover:shadow-md transition-shadow">
@@ -332,7 +356,7 @@ export default function CustomerList() {
                             <p className="text-xs font-semibold text-primary truncate" title={customer.companyName}>{customer.companyName}</p>
                           )}
                           {customer.country && (
-                            <span className="flex items-center gap-0.5 text-[10px] font-bold text-on-surface-variant uppercase tracking-tighter bg-surface-container-high px-1.5 py-0.5 rounded border border-outline-variant/30">
+                            <span className="flex items-center gap-0.5 text-[10px] font-bold text-on-surface-variant bg-surface-container-high px-1.5 py-0.5 rounded border border-outline-variant/30">
                               <Flag size={10} className="text-primary" />
                               {customer.country}
                             </span>
@@ -500,14 +524,18 @@ export default function CustomerList() {
                   </div>
 
                   {/* Product Mini Gallery */}
-                  {allProductImages.length > 0 && (
+                  {displayedProducts.length > 0 && (
                     <div className="mt-1">
-                      <p className="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Products</p>
+                      <p className="text-[10px] font-bold text-on-surface-variant mb-1.5">Products</p>
                       <div className="flex gap-1.5 overflow-hidden">
-                        {allProductImages.slice(0, 5).map((img, idx) => (
-                          <div key={idx} className="w-12 h-12 rounded-lg border border-outline-variant/20 overflow-hidden flex-shrink-0 bg-white shadow-sm">
-                            <img src={img} alt="" className="w-full h-full object-contain" />
-                          </div>
+                        {displayedProducts.map((pInfo, idx) => (
+                          <button 
+                            key={idx} 
+                            onClick={() => setPreviewImage(pInfo)}
+                            className="w-12 h-12 rounded-lg border border-outline-variant/20 overflow-hidden flex-shrink-0 bg-white shadow-sm hover:border-primary transition-all hover:scale-105"
+                          >
+                            <img src={pInfo.url} alt="" className="w-full h-full object-contain" />
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -516,7 +544,7 @@ export default function CustomerList() {
 
                 {/* Quotation Mini List */}
                 <div className="bg-surface-container-low/40 p-3 mt-auto border-t border-outline-variant/30">
-                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2 flex justify-between">
+                  <h3 className="text-xs font-bold text-on-surface-variant mb-2 flex justify-between">
                     <span>Recent Quotes</span>
                     <span className="text-primary">{customerQuotes.length} total</span>
                   </h3>
@@ -556,199 +584,193 @@ export default function CustomerList() {
             </div>
             
             <form onSubmit={handleSave}>
-              <div className="max-h-[70vh] overflow-y-auto p-6 flex flex-col gap-4">
-                <div className="flex flex-col items-center mb-4">
+              <div className="max-h-[80vh] overflow-y-auto p-6 flex flex-col gap-5">
+                <div className="flex items-center gap-6 mb-2">
                   <div className="relative group">
-                    <div className="w-24 h-24 rounded-full overflow-hidden bg-surface-container-low border-2 border-dashed border-outline-variant group-hover:border-primary transition-colors flex items-center justify-center">
+                    <div className="w-20 h-20 rounded-full overflow-hidden bg-surface-container-low border-2 border-dashed border-outline-variant group-hover:border-primary transition-colors flex items-center justify-center">
                       {formData.avatar ? (
                         <img src={formData.avatar} alt="Avatar Preview" className="w-full h-full object-cover" />
                       ) : (
-                        <User size={40} className="text-on-surface-variant/30" />
+                        <User size={32} className="text-on-surface-variant/30" />
                       )}
                     </div>
                     <label className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-full">
-                      <Camera size={24} />
+                      <Camera size={20} />
                       <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                     </label>
                   </div>
-                  <p className="text-[10px] text-on-surface-variant mt-2 uppercase tracking-wider font-label">Click to upload avatar</p>
+                  <div>
+                    <p className="text-sm font-medium text-on-surface">Customer Avatar</p>
+                    <p className="text-xs text-on-surface-variant mt-0.5">Click image to upload or change profile photo</p>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Customer Name</label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-on-surface-variant">Customer Name</label>
                     <input
                       type="text"
                       required
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
                       placeholder="e.g. John Doe"
                     />
                   </div>
 
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Company Name</label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-on-surface-variant">Company Name</label>
                     <input
                       type="text"
                       value={formData.companyName}
                       onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
                       placeholder="e.g. Acme Corp"
                     />
                   </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Email Address 1</label>
+                  
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-on-surface-variant">Primary Email</label>
                     <input
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
-                      placeholder="e.g. john@example.com"
+                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
+                      placeholder="john@example.com"
                     />
                   </div>
                   
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Email Address 2 (Backup)</label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-on-surface-variant">Secondary Email</label>
                     <input
                       type="email"
                       value={formData.email2}
                       onChange={(e) => setFormData({ ...formData, email2: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
-                      placeholder="e.g. j.doe@work.com"
+                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
+                      placeholder="Backup email"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Country</label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-on-surface-variant">Country</label>
                     <input
                       type="text"
                       value={formData.country}
                       onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
                       placeholder="e.g. USA"
                     />
                   </div>
 
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Telephone</label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-on-surface-variant">Telephone</label>
                     <input
                       type="tel"
                       value={formData.tel}
                       onChange={(e) => setFormData({ ...formData, tel: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
-                      placeholder="e.g. +1 234 567 890"
+                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
+                      placeholder="+1 234 567 890"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Website</label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-on-surface-variant">Website</label>
                     <input
                       type="text"
                       value={formData.website}
                       onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
-                      placeholder="e.g. www.example.com"
+                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
+                      placeholder="www.example.com"
                     />
                   </div>
                   
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Alibaba</label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-on-surface-variant">Alibaba</label>
                     <input
                       type="text"
                       value={formData.alibaba}
                       onChange={(e) => setFormData({ ...formData, alibaba: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
-                      placeholder="Profile or Store URL"
+                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
+                      placeholder="Profile URL"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">LinkedIn</label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-on-surface-variant">LinkedIn</label>
                     <input
                       type="text"
                       value={formData.linkedin}
                       onChange={(e) => setFormData({ ...formData, linkedin: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
                       placeholder="Profile URL"
                     />
                   </div>
                   
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Facebook</label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-on-surface-variant">Facebook</label>
                     <input
                       type="text"
                       value={formData.facebook}
                       onChange={(e) => setFormData({ ...formData, facebook: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
+                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
                       placeholder="Profile URL"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">WhatsApp</label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-on-surface-variant">WhatsApp</label>
                     <input
                       type="text"
                       value={formData.whatsapp}
                       onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
-                      placeholder="Number or URL"
+                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
+                      placeholder="Number or Link"
                     />
                   </div>
 
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Product Link (Request)</label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-on-surface-variant">Request Product Link</label>
                     <input
                       type="text"
                       value={formData.productLink}
                       onChange={(e) => setFormData({ ...formData, productLink: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
-                      placeholder="URL of product the customer wants"
+                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
+                      placeholder="Product URL"
                     />
                   </div>
 
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Local Folder Path</label>
+                  <div className="flex flex-col gap-1.5 md:col-span-2">
+                    <label className="text-sm font-medium text-on-surface-variant">Local Folder Path</label>
                     <input
                       type="text"
                       value={formData.localPath}
                       onChange={(e) => setFormData({ ...formData, localPath: e.target.value })}
-                      className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all"
-                      placeholder="e.g. /Users/Name/Documents/ClientA"
+                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm w-full"
+                      placeholder="/Users/Name/Documents/ClientA"
                     />
                   </div>
                 </div>
                 
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Address</label>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-on-surface-variant">Address</label>
                   <textarea
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all min-h-[80px]"
-                    placeholder="e.g. 123 Main St, City, Country"
+                    className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all min-h-[60px] text-sm"
+                    placeholder="Physical address"
                   />
                 </div>
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-label text-on-surface-variant uppercase tracking-wider">Notes / Remarks</label>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-on-surface-variant">Notes & Remarks</label>
                   <textarea
                     value={formData.notes}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    className="bg-surface-container-low px-4 py-2 rounded-lg outline-none border border-transparent focus:border-primary transition-all min-h-[80px]"
-                    placeholder="Add any internal notes about this customer..."
+                    className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all min-h-[60px] text-sm"
+                    placeholder="Internal notes..."
                   />
                 </div>
+
 
                 <div className="flex justify-end gap-3 mt-4">
                   <button
@@ -767,6 +789,38 @@ export default function CustomerList() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div 
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-[100] p-4 backdrop-blur-md cursor-zoom-out"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div className="relative max-w-4xl w-full h-full flex flex-col items-center justify-center gap-4" onClick={e => e.stopPropagation()}>
+            <button 
+              onClick={() => setPreviewImage(null)}
+              className="absolute -top-4 -right-4 md:top-0 md:right-0 bg-white text-black p-2 rounded-full shadow-xl hover:bg-gray-200 transition-colors z-10"
+            >
+              <X size={24} />
+            </button>
+            <img 
+              src={previewImage.url} 
+              alt="Product Preview" 
+              className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl scale-in-center"
+            />
+            
+            {(previewImage.code || previewImage.desc) && (
+              <Link 
+                to={`/products?search=${encodeURIComponent(previewImage.code || previewImage.desc || '')}`}
+                className="bg-primary text-on-primary px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:scale-105 transition-all shadow-lg"
+              >
+                <Package size={20} />
+                View in Library
+              </Link>
+            )}
           </div>
         </div>
       )}

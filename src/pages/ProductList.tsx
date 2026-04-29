@@ -6,6 +6,7 @@ import { Product, ProductVariant } from '../types';
 import { Package, Image as ImageIcon, Plus, Edit2, Trash2, X, Save, Upload, Minus, Filter, ChevronDown, Tag, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PRODUCT_CATEGORIES, CategoryName } from '../constants';
+import { useLocation } from 'react-router-dom';
 
 export default function ProductList() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -19,6 +20,15 @@ export default function ProductList() {
   const [filterSubcategory, setFilterSubcategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [exchangeRate, setExchangeRate] = useState<number>(6.8);
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const search = params.get('search');
+    if (search) {
+      setSearchQuery(search);
+    }
+  }, [location]);
 
   // Find duplicates for the UI warning
   const duplicateImages = products.reduce((acc, p) => {
