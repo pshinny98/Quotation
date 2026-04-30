@@ -183,6 +183,7 @@ export default function QuotationForm() {
             sizeH: v.sizeH,
             qty: 1,
             vol: v.vol,
+            gw: v.gw || 0,
             price: v.price
           }))
         };
@@ -209,6 +210,7 @@ export default function QuotationForm() {
               sizeH: v.sizeH,
               qty: 1,
               vol: v.vol,
+              gw: v.gw || 0,
               price: v.price
             }))
           };
@@ -233,11 +235,11 @@ export default function QuotationForm() {
   const [items, setItems] = useState<ProductItem[]>([
     { 
       id: 1, image: '', desc: 'Solid Wood Frame + High Density Sponge + Velvet/Fabric/Leather', 
-      subItems: [{ id: 11, itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 2, vol: 1.5, price: 850 }] 
+      subItems: [{ id: 11, itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 2, vol: 1.5, gw: 0, price: 850 }] 
     },
     { 
       id: 2, image: '', desc: 'Solid Oak Dining Table', 
-      subItems: [{ id: 21, itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 1, vol: 0.8, price: 600 }] 
+      subItems: [{ id: 21, itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 1, vol: 0.8, gw: 0, price: 600 }] 
     },
   ]);
 
@@ -315,14 +317,14 @@ export default function QuotationForm() {
       // Small delay to ensure any pending renders are complete
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      const dataUrl = await toPng(quotationRef.current, {
+      const element = quotationRef.current;
+      const dataUrl = await toPng(element, {
         cacheBust: true,
         backgroundColor: '#ffffff',
         style: {
           transform: 'scale(1)',
           transformOrigin: 'top left',
         },
-        width: 1024,
       });
       
       const pdf = new jsPDF({
@@ -332,10 +334,15 @@ export default function QuotationForm() {
       });
       
       const imgProps = pdf.getImageProperties(dataUrl);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      const pageWidth = pdf.internal.pageSize.getWidth();
       
-      pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      // Calculate margins to balance horizontal space
+      const marginX = 15;
+      const marginY = 20;
+      const contentWidth = pageWidth - (marginX * 2);
+      const contentHeight = (imgProps.height * contentWidth) / imgProps.width;
+      
+      pdf.addImage(dataUrl, 'PNG', marginX, marginY, contentWidth, contentHeight);
       
       const fileName = `${customer.name || 'Customer'}-${quoteRef || 'Draft'}`;
       pdf.save(`${fileName}.pdf`);
@@ -377,8 +384,6 @@ export default function QuotationForm() {
           transform: 'scale(1)',
           transformOrigin: 'top left',
         },
-        // Ensure we capture the full width/height
-        width: 1024,
       });
       
       const link = document.createElement('a');
@@ -395,7 +400,8 @@ export default function QuotationForm() {
   };
 
   const subtotal = items.reduce((sum, product) => sum + product.subItems.reduce((subSum, sub) => subSum + (sub.qty * sub.price), 0), 0);
-  const totalVolume = items.reduce((sum, product) => sum + product.subItems.reduce((subSum, sub) => subSum + (Number(sub.vol) || 0), 0), 0);
+  const totalVolume = items.reduce((sum, product) => sum + product.subItems.reduce((subSum, sub) => subSum + (Number(sub.vol) || 0) * sub.qty, 0), 0);
+  const totalWeight = items.reduce((sum, product) => sum + product.subItems.reduce((subSum, sub) => subSum + (Number(sub.gw) || 0) * sub.qty, 0), 0);
   const grandTotal = subtotal + (Number(seaFreight) || 0);
 
   const handleSave = async () => {
@@ -520,6 +526,7 @@ export default function QuotationForm() {
             sizeH: subItem.sizeH || 0,
             price: subItem.price || 0,
             vol: ((subItem.sizeW * subItem.sizeD * subItem.sizeH) / 1000000) || 0,
+            gw: subItem.gw || 0,
           }));
 
           try {
@@ -570,9 +577,9 @@ export default function QuotationForm() {
           subItems: p.subItems.map(s => {
             if (s.id === subItemId) {
               const updated = { ...s, [field]: value };
-              // Recalculate volume if sizes or qty change
-              if (['sizeW', 'sizeD', 'sizeH', 'qty'].includes(field)) {
-                updated.vol = (updated.sizeW * updated.sizeD * updated.sizeH * updated.qty) / 1000000;
+              // Recalculate volume if sizes change
+              if (['sizeW', 'sizeD', 'sizeH'].includes(field)) {
+                updated.vol = Number(((updated.sizeW * updated.sizeD * updated.sizeH) / 1000000).toFixed(2));
               }
               return updated;
             }
@@ -622,7 +629,7 @@ export default function QuotationForm() {
 
   const addProduct = () => {
     const newId = items.length > 0 ? Math.max(...items.map(i => i.id)) + 1 : 1;
-    setItems([...items, { id: newId, image: '', desc: '', subItems: [{ id: Date.now(), itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 1, vol: 0, price: 0 }] }]);
+    setItems([...items, { id: newId, image: '', desc: '', subItems: [{ id: Date.now(), itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 1, vol: 0, gw: 0, price: 0 }] }]);
   };
 
   const addSubItem = (productId: number) => {
@@ -630,7 +637,7 @@ export default function QuotationForm() {
       if (p.id === productId) {
         return {
           ...p,
-          subItems: [...p.subItems, { id: Date.now(), itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 1, vol: 0, price: 0 }]
+          subItems: [...p.subItems, { id: Date.now(), itemName: '', sizeW: 0, sizeD: 0, sizeH: 0, qty: 1, vol: 0, gw: 0, price: 0 }]
         };
       }
       return p;
@@ -793,16 +800,16 @@ export default function QuotationForm() {
             </div>
           </div>
 
-          {/* Product Table */}
           <div className="flex flex-col w-full overflow-x-auto">
             <div className="min-w-[800px]">
-              <div className="grid grid-cols-[100px_1fr_100px_40px_40px_40px_45px_55px_110px_110px_40px] print-grid gap-1 bg-secondary-container text-on-secondary-container px-2 py-3 text-xs font-label tracking-wider font-semibold text-center rounded-t-md">
+              <div className="grid grid-cols-[65px_1fr_70px_40px_40px_40px_40px_45px_50px_75px_85px_40px] print-grid gap-x-2 gap-y-1 bg-secondary-container text-on-secondary-container px-2 py-3 text-xs font-label tracking-wider font-semibold text-center rounded-t-md">
                 <div>Image</div>
                 <div>Description</div>
                 <div>Item</div>
-                <div className="col-span-3">Size(W*D*H)</div>
+                <div className="col-span-3 text-center">Size(W*D*H)</div>
                 <div>Qty</div>
-                <div>Volume</div>
+                <div className="pr-1">Weight</div>
+                <div className="pl-1">Volume</div>
                 <div className="whitespace-nowrap text-center">Unit Price</div>
                 <div className="whitespace-nowrap text-center">Total Price</div>
                 <div className={`print:hidden ${(isExporting || isExportingPDF) ? 'hidden' : ''}`}></div>
@@ -812,7 +819,7 @@ export default function QuotationForm() {
                 {items.map((product) => (
                   <div key={product.id} className="flex border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors group min-h-[120px] px-2 py-2 gap-2 relative">
                     
-                    <div className="w-[100px] shrink-0 flex flex-col items-center justify-center gap-2">
+                    <div className="w-[65px] shrink-0 flex flex-col items-center justify-center gap-2">
                       <div className="w-20 h-20 bg-secondary-container rounded flex items-center justify-center cursor-pointer hover:bg-primary-container transition-colors relative overflow-hidden group/upload">
                         {product.image ? (
                           <img src={product.image} alt="Product" className="w-full h-full object-contain" />
@@ -846,18 +853,18 @@ export default function QuotationForm() {
                       </button>
                     </div>
                     
-                    <div className="flex-1 flex items-center justify-center">
+                    <div className="flex-1 flex items-center justify-start px-2">
                       <AutoTextarea 
                         value={product.desc} 
                         onChange={(e) => updateProduct(product.id, 'desc', e.target.value)}
                         placeholder="Enter description"
-                        className="text-xs font-medium text-center w-full"
+                        className="text-xs font-medium text-left w-full"
                       />
                     </div>
 
-                    <div className="flex flex-col justify-center gap-2 shrink-0">
+                    <div className="flex-col justify-center gap-2 shrink-0 flex">
                       {product.subItems.map((subItem) => (
-                        <div key={subItem.id} className="grid grid-cols-[100px_40px_40px_40px_45px_55px_110px_110px_40px] print-grid-subitem gap-1 items-center text-center group/sub">
+                        <div key={subItem.id} className="grid grid-cols-[70px_40px_40px_40px_40px_45px_50px_75px_85px_40px] print-grid-subitem gap-x-2 gap-y-1 items-center text-center group/sub">
                           
                           <div className="text-on-surface text-center">
                             <AutoTextarea 
@@ -906,15 +913,34 @@ export default function QuotationForm() {
                             />
                           </div>
 
-                          <div className="flex justify-center items-center">
-                            <input 
-                              type="number" 
-                              step="0.01"
-                              value={subItem.vol || ''} 
-                              onChange={(e) => updateSubItem(product.id, subItem.id, 'vol', parseFloat(e.target.value) || 0)}
-                              className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full text-center p-0 text-on-surface [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              placeholder="0.00"
-                            />
+                          <div className="flex justify-center pr-1">
+                            {(isExporting || isExportingPDF) ? (
+                              <span className="text-on-surface">{Number(subItem.gw || 0).toFixed(1)}</span>
+                            ) : (
+                              <input 
+                                type="number" 
+                                step="0.1"
+                                value={subItem.gw || ''} 
+                                onChange={(e) => updateSubItem(product.id, subItem.id, 'gw', parseFloat(e.target.value) || 0)}
+                                className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full text-center p-0 text-on-surface [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                placeholder="0.0"
+                              />
+                            )}
+                          </div>
+
+                          <div className="flex justify-center pl-1">
+                            {(isExporting || isExportingPDF) ? (
+                              <span className="text-on-surface">{Number(subItem.vol || 0).toFixed(2)}</span>
+                            ) : (
+                              <input 
+                                type="number" 
+                                step="0.01"
+                                value={subItem.vol || ''} 
+                                onChange={(e) => updateSubItem(product.id, subItem.id, 'vol', parseFloat(e.target.value) || 0)}
+                                className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full text-center p-0 text-on-surface [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                placeholder="0.00"
+                              />
+                            )}
                           </div>
 
                           <div className="flex items-center justify-center gap-0">
@@ -997,6 +1023,13 @@ export default function QuotationForm() {
                 <div className="flex items-center justify-end gap-1 font-medium text-on-surface min-w-[120px]">
                   <span>{totalVolume.toFixed(2)}</span>
                   <span className="text-on-surface-variant text-xs ml-1">CBM</span>
+                </div>
+              </div>
+              <div className="flex justify-between font-body text-on-surface-variant text-sm gap-8">
+                <span>Total Weight</span>
+                <div className="flex items-center justify-end gap-1 font-medium text-on-surface min-w-[120px]">
+                  <span>{totalWeight.toFixed(1)}</span>
+                  <span className="text-on-surface-variant text-xs ml-1">KG</span>
                 </div>
               </div>
               <div className="flex justify-between items-center font-body text-on-surface-variant text-sm gap-8">

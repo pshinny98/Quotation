@@ -6,6 +6,7 @@ export interface SubItem {
   sizeH: number;
   qty: number;
   vol: number;
+  gw: number;
   price: number;
 }
 
@@ -79,6 +80,7 @@ export interface ProductVariant {
   sizeH: number;
   price: number;
   vol: number;
+  gw?: number;
   cost?: number;
   factor?: number;
 }

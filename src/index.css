@@ -56,20 +56,17 @@
   }
 
   .print-scale {
-    zoom: 0.7;
-    width: 1024px !important;
-    max-width: 1024px !important;
+    width: 100% !important;
+    max-width: none !important;
     box-shadow: none !important;
-    margin: 0 auto !important;
+    margin: 0 !important;
     padding: 0 !important;
   }
 
   .print-grid {
-    grid-template-columns: 100px 1fr 100px 40px 40px 40px 45px 55px 110px 110px !important;
-    gap: 4px !important;
+    gap: 2px !important;
   }
   .print-grid-subitem {
-    grid-template-columns: 100px 40px 40px 40px 45px 55px 110px 110px !important;
-    gap: 4px !important;
+    gap: 2px !important;
   }
 }
