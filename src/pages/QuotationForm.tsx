@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Image as ImageIcon, X, PlusCircle, Save, Trash2, Download, Library, Search } from 'lucide-react';
+import { ArrowLeft, Image as ImageIcon, X, PlusCircle, Save, Trash2, Download, Library, Search, User, Mail, Phone, MapPin } from 'lucide-react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { collection, doc, setDoc, getDoc, addDoc, deleteDoc, query, where, onSnapshot } from 'firebase/firestore';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { db, auth } from '../firebase';
 import { handleFirestoreError, OperationType, compressBase64Image, hashString } from '../lib/firestoreUtils';
-import { ProductItem, SubItem, Product } from '../types';
+import { ProductItem, SubItem, Product, Customer } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Auto-expanding textarea component
@@ -84,20 +84,79 @@ export default function QuotationForm() {
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [libraryProducts, setLibraryProducts] = useState<Product[]>([]);
+  const [directoryCustomers, setDirectoryCustomers] = useState<Customer[]>([]);
   const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false);
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+
+  const [customer, setCustomer] = useState({
+    name: '',
+    companyName: '',
+    email: '',
+    tel: '',
+    address: ''
+  });
+
+  const [quoteDate, setQuoteDate] = useState('');
+  const [quoteRef, setQuoteRef] = useState('');
+  const [displaySettings, setDisplaySettings] = useState({
+    showCompanyName: true,
+    showEmail: true,
+    showTel: true,
+    showAddress: true
+  });
 
   useEffect(() => {
     if (!auth.currentUser) return;
-    const q = query(collection(db, 'products'), where('userId', '==', auth.currentUser.uid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    
+    // Fetch Products
+    const qProducts = query(collection(db, 'products'), where('userId', '==', auth.currentUser.uid));
+    const unsubscribeProducts = onSnapshot(qProducts, (snapshot) => {
       const prods: Product[] = [];
       snapshot.forEach((doc) => prods.push({ id: doc.id, ...doc.data() } as Product));
       setLibraryProducts(prods);
     });
-    return () => unsubscribe();
+
+    // Fetch Customers
+    const qCustomers = query(collection(db, 'customers'), where('userId', '==', auth.currentUser.uid));
+    const unsubscribeCustomers = onSnapshot(qCustomers, (snapshot) => {
+      const custs: Customer[] = [];
+      snapshot.forEach((doc) => custs.push({ id: doc.id, ...doc.data() } as Customer));
+      setDirectoryCustomers(custs);
+    });
+
+    return () => {
+      unsubscribeProducts();
+      unsubscribeCustomers();
+    };
   }, []);
+
+  const selectCustomerFromDirectory = (c: Customer) => {
+    setCustomer({
+      name: c.name || '',
+      companyName: c.companyName || '',
+      email: c.email || '',
+      tel: c.tel || '',
+      address: c.address || ''
+    });
+    setIsCustomerModalOpen(false);
+  };
+
+  useEffect(() => {
+    if (!customer.email && !customer.tel) return;
+    
+    // Don't auto-fill if name is already set and matches the search
+    const exactMatch = directoryCustomers.find(c => 
+      (customer.email && c.email.toLowerCase() === customer.email.toLowerCase()) || 
+      (customer.tel && c.tel === customer.tel)
+    );
+
+    if (exactMatch && (!customer.name || customer.name === '')) {
+      selectCustomerFromDirectory(exactMatch);
+    }
+  }, [customer.email, customer.tel, directoryCustomers]);
 
   const selectFromLibrary = (product: Product) => {
     if (activeItemIndex === null) return;
@@ -187,21 +246,6 @@ export default function QuotationForm() {
   const [seaFreightNote, setSeaFreightNote] = useState<string>('');
   const [footerNote, setFooterNote] = useState<string>('');
   
-  const [customer, setCustomer] = useState({
-    name: '',
-    email: '',
-    tel: '',
-    address: ''
-  });
-
-  const [quoteDate, setQuoteDate] = useState('');
-  const [quoteRef, setQuoteRef] = useState('');
-  const [displaySettings, setDisplaySettings] = useState({
-    showEmail: true,
-    showTel: true,
-    showAddress: true
-  });
-
   useEffect(() => {
     if (id) {
       // Load existing quotation
@@ -213,13 +257,13 @@ export default function QuotationForm() {
           if (docSnap.exists()) {
             const data = docSnap.data();
             setItems(data.items || []);
-            setCustomer(data.customer || { name: '', email: '', tel: '', address: '' });
+            setCustomer(data.customer || { name: '', companyName: '', email: '', tel: '', address: '' });
             setSeaFreight(data.seaFreight || '0');
             setSeaFreightNote(data.seaFreightNote || '');
             setFooterNote(data.footerNote || '');
             setQuoteDate(data.quoteDate || '');
             setQuoteRef(data.quoteRef || '');
-            setDisplaySettings(data.displaySettings || { showEmail: true, showTel: true, showAddress: true });
+            setDisplaySettings(data.displaySettings || { showCompanyName: true, showEmail: true, showTel: true, showAddress: true });
           }
         } catch (error) {
           handleFirestoreError(error, OperationType.GET, path);
@@ -251,6 +295,7 @@ export default function QuotationForm() {
             const data = docSnap.data();
             setCustomer({
               name: data.name || '',
+              companyName: data.companyName || '',
               email: data.email || '',
               tel: data.tel || '',
               address: data.address || ''
@@ -658,7 +703,7 @@ export default function QuotationForm() {
             <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
               <div>
                 <h1 className="text-primary text-2xl sm:text-3xl font-headline font-bold tracking-tight mb-1">Shenzhen Janus Furniture Co., Ltd</h1>
-                <p className="text-on-surface-variant font-label uppercase tracking-widest mt-2 font-bold text-lg">Quotation</p>
+                <p className="text-on-surface-variant font-label tracking-widest mt-2 font-bold text-lg">Quotation</p>
               </div>
               <div className="text-left sm:text-right flex flex-col gap-1 text-on-surface-variant text-sm">
                 <p>Date: <span className="text-on-surface font-medium">{quoteDate}</span></p>
@@ -693,8 +738,9 @@ export default function QuotationForm() {
                 Customer Information
               </h3>
               <div className={`flex flex-wrap items-center gap-4 px-2 py-1 bg-surface-container-low rounded-md print:hidden ${(isExporting || isExportingPDF) ? 'hidden' : ''}`}>
-                <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Display:</span>
+                <span className="text-[10px] font-bold text-primary tracking-wider">Display:</span>
                 {[
+                  { label: 'Company', key: 'showCompanyName' },
                   { label: 'Email', key: 'showEmail' },
                   { label: 'Tel', key: 'showTel' },
                   { label: 'Address', key: 'showAddress' },
@@ -709,11 +755,20 @@ export default function QuotationForm() {
                     <span className="text-xs text-on-surface-variant group-hover/toggle:text-primary transition-colors font-medium">{toggle.label}</span>
                   </label>
                 ))}
+                <div className="w-px h-4 bg-outline-variant mx-1"></div>
+                <button 
+                  onClick={() => setIsCustomerModalOpen(true)}
+                  className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary hover:bg-primary/20 rounded transition-colors text-xs font-bold"
+                >
+                  <Search size={12} />
+                  Directory
+                </button>
               </div>
             </div>
             <div className="bg-surface-container-low p-6 rounded-lg flex flex-wrap gap-x-12 gap-y-6">
               {[
                 { label: 'Name', key: 'name', type: 'text', placeholder: 'Enter name', width: 'w-[200px]' },
+                { label: 'Company', key: 'companyName', type: 'text', placeholder: 'Company name', showKey: 'showCompanyName', width: 'w-[180px]' },
                 { label: 'Email', key: 'email', type: 'email', placeholder: 'Enter email', showKey: 'showEmail', width: 'w-[180px]' },
                 { label: 'Tel', key: 'tel', type: 'tel', placeholder: 'Enter phone number', showKey: 'showTel', width: 'w-[150px]' },
                 { label: 'Address', key: 'address', type: 'text', placeholder: 'Enter address', showKey: 'showAddress', width: 'flex-1 min-w-[200px]' },
@@ -981,7 +1036,7 @@ export default function QuotationForm() {
           </div>
 
           <div className="bg-surface-container-low p-6 rounded-lg flex flex-col gap-4">
-            <h4 className="text-on-surface text-sm font-headline font-semibold uppercase tracking-wider">Terms & Conditions</h4>
+            <h4 className="text-on-surface text-sm font-headline font-semibold tracking-wider">Terms & Conditions</h4>
             <ul className="list-disc list-inside text-sm font-body text-on-surface-variant space-y-2 capitalize">
               <li><strong className="text-on-surface font-medium">Packing:</strong> Standard export carton packing.</li>
               <li><strong className="text-on-surface font-medium">Delivery Time:</strong> 20-35 days after receipt of deposit.</li>
@@ -1107,6 +1162,97 @@ export default function QuotationForm() {
                 {libraryProducts.length === 0 && (
                   <div className="col-span-full py-12 text-center text-on-surface-variant">
                     Your product library is empty.
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Customer Directory Modal */}
+      <AnimatePresence>
+        {isCustomerModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 print:hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsCustomerModalOpen(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-surface-container-lowest w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+            >
+              <div className="flex items-center justify-between p-6 border-b border-outline-variant/30">
+                <div className="flex items-center gap-3">
+                  <User className="text-primary" size={24} />
+                  <h2 className="text-xl font-headline font-bold text-primary">Customer Directory</h2>
+                </div>
+                <div className="flex items-center gap-4 flex-1 max-w-sm mx-8">
+                  <div className="relative w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" size={18} />
+                    <input
+                      type="text"
+                      placeholder="Search customers..."
+                      value={customerSearchQuery}
+                      onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                      className="w-full bg-surface-container-low pl-10 pr-4 py-2 rounded-full outline-none border border-transparent focus:border-primary transition-all text-sm"
+                    />
+                  </div>
+                </div>
+                <button onClick={() => setIsCustomerModalOpen(false)} className="p-2 hover:bg-surface-container-low rounded-full transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto flex flex-col gap-3">
+                {directoryCustomers
+                  .filter(c => 
+                    c.name.toLowerCase().includes(customerSearchQuery.toLowerCase()) || 
+                    c.email.toLowerCase().includes(customerSearchQuery.toLowerCase()) || 
+                    c.tel.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
+                    c.companyName?.toLowerCase().includes(customerSearchQuery.toLowerCase())
+                  )
+                  .map((c) => (
+                    <button 
+                      key={c.id} 
+                      onClick={() => selectCustomerFromDirectory(c)}
+                      className="bg-surface-container-low p-4 rounded-xl flex items-center gap-4 hover:bg-primary/5 hover:ring-1 hover:ring-primary transition-all text-left group"
+                    >
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-container-high shrink-0 border border-outline-variant/30">
+                        {c.avatar ? (
+                          <img src={c.avatar} alt={c.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-on-surface-variant/30">
+                            <User size={24} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2">
+                          <h4 className="font-bold text-on-surface truncate">{c.name}</h4>
+                          {c.companyName && <span className="text-xs text-primary font-medium truncate">@{c.companyName}</span>}
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                          <div className="flex items-center gap-1.5 text-xs text-on-surface-variant">
+                            <Mail size={12} className="opacity-70" />
+                            <span>{c.email || 'No email'}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-on-surface-variant">
+                            <Phone size={12} className="opacity-70" />
+                            <span>{c.tel || 'No phone'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                {directoryCustomers.length === 0 && (
+                  <div className="py-12 text-center text-on-surface-variant">
+                    No customers found in directory.
                   </div>
                 )}
               </div>

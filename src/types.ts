@@ -18,6 +18,7 @@ export interface ProductItem {
 
 export interface CustomerInfo {
   name: string;
+  companyName?: string;
   email: string;
   tel: string;
   address: string;
