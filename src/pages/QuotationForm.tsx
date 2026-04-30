@@ -102,7 +102,6 @@ export default function QuotationForm() {
   const [quoteDate, setQuoteDate] = useState('');
   const [quoteRef, setQuoteRef] = useState('');
   const [displaySettings, setDisplaySettings] = useState({
-    showCompanyName: true,
     showEmail: true,
     showTel: true,
     showAddress: true
@@ -263,7 +262,7 @@ export default function QuotationForm() {
             setFooterNote(data.footerNote || '');
             setQuoteDate(data.quoteDate || '');
             setQuoteRef(data.quoteRef || '');
-            setDisplaySettings(data.displaySettings || { showCompanyName: true, showEmail: true, showTel: true, showAddress: true });
+            setDisplaySettings(data.displaySettings || { showEmail: true, showTel: true, showAddress: true });
           }
         } catch (error) {
           handleFirestoreError(error, OperationType.GET, path);
@@ -396,10 +395,7 @@ export default function QuotationForm() {
   };
 
   const subtotal = items.reduce((sum, product) => sum + product.subItems.reduce((subSum, sub) => subSum + (sub.qty * sub.price), 0), 0);
-  const totalVolume = items.reduce((sum, product) => sum + product.subItems.reduce((subSum, sub) => {
-    const vol = (sub.sizeW * sub.sizeD * sub.sizeH * sub.qty) / 1000000;
-    return subSum + vol;
-  }, 0), 0);
+  const totalVolume = items.reduce((sum, product) => sum + product.subItems.reduce((subSum, sub) => subSum + (Number(sub.vol) || 0), 0), 0);
   const grandTotal = subtotal + (Number(seaFreight) || 0);
 
   const handleSave = async () => {
@@ -711,10 +707,10 @@ export default function QuotationForm() {
               </div>
             </div>
 
-            <div className="bg-surface-container-low p-6 rounded-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[auto_180px_150px_1fr] print:grid-cols-[auto_180px_150px_1fr] gap-x-12 gap-y-6">
+            <div className="bg-surface-container-low p-4 px-5 rounded-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[240px_180px_150px_1fr] print:grid-cols-[240px_180px_150px_1fr] gap-x-8 gap-y-6">
               <div className="flex flex-col gap-1">
                 <span className="text-on-surface-variant text-xs font-label tracking-wider">Website</span>
-                <span className="text-on-surface text-sm font-medium whitespace-nowrap">https://szjanus.en.alibaba.com</span>
+                <span className="text-on-surface text-sm font-medium">https://szjanus.en.alibaba.com</span>
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-on-surface-variant text-xs font-label tracking-wider">Email</span>
@@ -740,7 +736,6 @@ export default function QuotationForm() {
               <div className={`flex flex-wrap items-center gap-4 px-2 py-1 bg-surface-container-low rounded-md print:hidden ${(isExporting || isExportingPDF) ? 'hidden' : ''}`}>
                 <span className="text-[10px] font-bold text-primary tracking-wider">Display:</span>
                 {[
-                  { label: 'Company', key: 'showCompanyName' },
                   { label: 'Email', key: 'showEmail' },
                   { label: 'Tel', key: 'showTel' },
                   { label: 'Address', key: 'showAddress' },
@@ -765,22 +760,24 @@ export default function QuotationForm() {
                 </button>
               </div>
             </div>
-            <div className="bg-surface-container-low p-6 rounded-lg flex flex-wrap gap-x-12 gap-y-6">
+            <div className="bg-surface-container-low p-4 px-5 rounded-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[240px_180px_150px_1fr] print:grid-cols-[240px_180px_150px_1fr] gap-x-8 gap-y-6">
               {[
-                { label: 'Name', key: 'name', type: 'text', placeholder: 'Enter name', width: 'w-[200px]' },
-                { label: 'Company', key: 'companyName', type: 'text', placeholder: 'Company name', showKey: 'showCompanyName', width: 'w-[180px]' },
-                { label: 'Email', key: 'email', type: 'email', placeholder: 'Enter email', showKey: 'showEmail', width: 'w-[180px]' },
-                { label: 'Tel', key: 'tel', type: 'tel', placeholder: 'Enter phone number', showKey: 'showTel', width: 'w-[150px]' },
-                { label: 'Address', key: 'address', type: 'text', placeholder: 'Enter address', showKey: 'showAddress', width: 'flex-1 min-w-[200px]' },
-              ].map((field) => {
-                const isVisible = !field.showKey || displaySettings[field.showKey as keyof typeof displaySettings];
-                
-                if (!isVisible) return null;
+                { label: 'Name', key: 'name', type: 'text', placeholder: 'Enter name' },
+                { label: 'Email', key: 'email', type: 'email', placeholder: 'Enter email', showKey: 'showEmail' },
+                { label: 'Tel', key: 'tel', type: 'tel', placeholder: 'Enter phone number', showKey: 'showTel' },
+                { label: 'Address', key: 'address', type: 'text', placeholder: 'Enter address', showKey: 'showAddress' },
+              ].filter(field => !field.showKey || displaySettings[field.showKey as keyof typeof displaySettings])
+              .map((field, index, visibleFields) => {
+                const isAddress = field.key === 'address';
+                // Total columns is 4. Address should span from its position to the end.
+                // index + 1 is the starting column.
+                const span = isAddress ? (4 - index) : 1;
+                const spanClass = span > 1 ? `lg:col-span-${span} print:col-span-${span}` : '';
 
                 return (
                   <div 
                     key={field.key} 
-                    className={`flex flex-col gap-1 transition-all duration-300 ${field.width}`}
+                    className={`flex flex-col gap-1 transition-all duration-300 ${spanClass}`}
                   >
                     <span className="text-on-surface-variant text-xs font-label tracking-wider">{field.label}</span>
                     <AutoInput
@@ -910,9 +907,14 @@ export default function QuotationForm() {
                           </div>
 
                           <div className="flex justify-center items-center">
-                            <span className="text-on-surface">
-                              {((subItem.sizeW * subItem.sizeD * subItem.sizeH * subItem.qty) / 1000000).toFixed(2)}
-                            </span>
+                            <input 
+                              type="number" 
+                              step="0.01"
+                              value={subItem.vol || ''} 
+                              onChange={(e) => updateSubItem(product.id, subItem.id, 'vol', parseFloat(e.target.value) || 0)}
+                              className="bg-transparent border-b-2 border-transparent focus:border-primary outline-none w-full text-center p-0 text-on-surface [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              placeholder="0.00"
+                            />
                           </div>
 
                           <div className="flex items-center justify-center gap-0">
