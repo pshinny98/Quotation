@@ -417,7 +417,7 @@ export default function CustomerList() {
                               <Send size={10} className="opacity-0 group-hover/email:opacity-100" />
                             </a>
                             <button 
-                              onClick={() => window.open(`https://mail.zoho.com/zm/#mail/compose/${customer.email}`, '_blank')}
+                              onClick={() => window.open(`https://mail.zoho.com.cn/zm/#mail/compose/${customer.email}`, '_blank')}
                               className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
                               title="Compose in Zoho Mail (Web)"
                             >
@@ -452,7 +452,7 @@ export default function CustomerList() {
                             <Send size={10} className="opacity-0 group-hover/email2:opacity-100" />
                           </a>
                           <button 
-                            onClick={() => window.open(`https://mail.zoho.com/zm/#mail/compose/${customer.email2}`, '_blank')}
+                            onClick={() => window.open(`https://mail.zoho.com.cn/zm/#mail/compose/${customer.email2}`, '_blank')}
                             className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
                             title="Compose in Zoho Mail (Web)"
                           >
