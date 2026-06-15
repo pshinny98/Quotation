@@ -393,9 +393,19 @@ export default function CustomerList() {
                   <div className="space-y-1.5 border-b border-outline-variant/10 pb-3">
                     <div className="flex items-center gap-2 text-xs text-on-surface-variant group/email">
                       <Mail size={12} className="flex-shrink-0 text-primary" />
-                      <a href={`mailto:${customer.email}`} className="hover:text-primary transition-colors truncate font-medium">
-                        {customer.email || 'No email'}
-                      </a>
+                      {customer.email ? (
+                        <a 
+                          href={`https://mail.zoho.com.cn/zm/#mail/compose/${customer.email}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:text-primary transition-colors truncate font-medium"
+                          title="Compose in Zoho Mail"
+                        >
+                          {customer.email}
+                        </a>
+                      ) : (
+                        <span className="text-on-surface-variant/40 italic">No email</span>
+                      )}
                       <div className="ml-auto flex items-center gap-1">
                         {customer.email && (
                           <>
@@ -410,16 +420,18 @@ export default function CustomerList() {
                               {copiedText === customer.email ? <Check size={10} className="text-success" /> : <Copy size={10} className="opacity-0 group-hover/email:opacity-100" />}
                             </button>
                             <a 
-                              href={`mailto:${customer.email}`}
+                              href={`https://mail.zoho.com.cn/zm/#mail/compose/${customer.email}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
                               className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
-                              title="Open in Local Mail Client (Zoho Desktop)"
+                              title="Compose in Zoho Mail"
                             >
                               <Send size={10} className="opacity-0 group-hover/email:opacity-100" />
                             </a>
                             <button 
                               onClick={() => window.open(`https://mail.zoho.com.cn/zm/#mail/compose/${customer.email}`, '_blank')}
                               className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
-                              title="Compose in Zoho Mail (Web)"
+                              title="Compose in Zoho Mail"
                             >
                               <span className="text-[8px] font-bold opacity-0 group-hover/email:opacity-100">Zoho</span>
                             </button>
@@ -430,7 +442,13 @@ export default function CustomerList() {
                     {customer.email2 && (
                       <div className="flex items-center gap-2 text-xs text-on-surface-variant group/email2">
                         <Mail size={12} className="flex-shrink-0 text-primary opacity-60" />
-                        <a href={`mailto:${customer.email2}`} className="hover:text-primary transition-colors truncate italic">
+                        <a 
+                          href={`https://mail.zoho.com.cn/zm/#mail/compose/${customer.email2}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:text-primary transition-colors truncate italic"
+                          title="Compose in Zoho Mail"
+                        >
                           {customer.email2}
                         </a>
                         <div className="ml-auto flex items-center gap-1">
@@ -445,16 +463,18 @@ export default function CustomerList() {
                             {copiedText === customer.email2 ? <Check size={10} className="text-success" /> : <Copy size={10} className="opacity-0 group-hover/email2:opacity-100" />}
                           </button>
                           <a 
-                            href={`mailto:${customer.email2}`}
+                            href={`https://mail.zoho.com.cn/zm/#mail/compose/${customer.email2}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
-                            title="Open in Local Mail Client"
+                            title="Compose in Zoho Mail"
                           >
                             <Send size={10} className="opacity-0 group-hover/email2:opacity-100" />
                           </a>
                           <button 
                             onClick={() => window.open(`https://mail.zoho.com.cn/zm/#mail/compose/${customer.email2}`, '_blank')}
                             className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
-                            title="Compose in Zoho Mail (Web)"
+                            title="Compose in Zoho Mail"
                           >
                             <span className="text-[8px] font-bold opacity-0 group-hover/email2:opacity-100">Zoho</span>
                           </button>
