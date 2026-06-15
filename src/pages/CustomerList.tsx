@@ -395,7 +395,7 @@ export default function CustomerList() {
                       <Mail size={12} className="flex-shrink-0 text-primary" />
                       {customer.email ? (
                         <a 
-                          href={`https://mail.zoho.com.cn/zm/#mail/compose/${customer.email}`}
+                          href={`https://mail.zoho.com.cn/zm/#mail/compose/mailto:${customer.email}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="hover:text-primary transition-colors truncate font-medium"
@@ -420,7 +420,7 @@ export default function CustomerList() {
                               {copiedText === customer.email ? <Check size={10} className="text-success" /> : <Copy size={10} className="opacity-0 group-hover/email:opacity-100" />}
                             </button>
                             <a 
-                              href={`https://mail.zoho.com.cn/zm/#mail/compose/${customer.email}`}
+                              href={`https://mail.zoho.com.cn/zm/#mail/compose/mailto:${customer.email}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
@@ -429,7 +429,7 @@ export default function CustomerList() {
                               <Send size={10} className="opacity-0 group-hover/email:opacity-100" />
                             </a>
                             <button 
-                              onClick={() => window.open(`https://mail.zoho.com.cn/zm/#mail/compose/${customer.email}`, '_blank')}
+                              onClick={() => window.open(`https://mail.zoho.com.cn/zm/#mail/compose/mailto:${customer.email}`, '_blank')}
                               className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
                               title="Compose in Zoho Mail"
                             >
@@ -443,7 +443,7 @@ export default function CustomerList() {
                       <div className="flex items-center gap-2 text-xs text-on-surface-variant group/email2">
                         <Mail size={12} className="flex-shrink-0 text-primary opacity-60" />
                         <a 
-                          href={`https://mail.zoho.com.cn/zm/#mail/compose/${customer.email2}`}
+                          href={`https://mail.zoho.com.cn/zm/#mail/compose/mailto:${customer.email2}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="hover:text-primary transition-colors truncate italic"
@@ -463,7 +463,7 @@ export default function CustomerList() {
                             {copiedText === customer.email2 ? <Check size={10} className="text-success" /> : <Copy size={10} className="opacity-0 group-hover/email2:opacity-100" />}
                           </button>
                           <a 
-                            href={`https://mail.zoho.com.cn/zm/#mail/compose/${customer.email2}`}
+                            href={`https://mail.zoho.com.cn/zm/#mail/compose/mailto:${customer.email2}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
@@ -472,7 +472,7 @@ export default function CustomerList() {
                             <Send size={10} className="opacity-0 group-hover/email2:opacity-100" />
                           </a>
                           <button 
-                            onClick={() => window.open(`https://mail.zoho.com.cn/zm/#mail/compose/${customer.email2}`, '_blank')}
+                            onClick={() => window.open(`https://mail.zoho.com.cn/zm/#mail/compose/mailto:${customer.email2}`, '_blank')}
                             className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
                             title="Compose in Zoho Mail"
                           >
