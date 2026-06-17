@@ -4,7 +4,7 @@ import { db, auth } from '../firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { Customer, Quotation } from '../types';
 import { Link } from 'react-router-dom';
-import { Users, FileText, Plus, Edit2, Trash2, X, Mail, Phone, MapPin, Camera, User, Globe, Linkedin, Facebook, MessageCircle, Flag, Filter, Calendar, Search, ShoppingBag, Copy, Check, Send, Link2, FilePlus, FolderOpen, Package } from 'lucide-react';
+import { Users, FileText, Plus, Edit2, Trash2, X, Mail, Phone, MapPin, Camera, User, Globe, Linkedin, Facebook, MessageCircle, Flag, Filter, Calendar, Search, ShoppingBag, Copy, Check, Send, Link2, FilePlus, FolderOpen, Package, Sparkles, Brain, Loader2 } from 'lucide-react';
 
 export default function CustomerList() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -32,6 +32,14 @@ export default function CustomerList() {
   });
   const [copiedText, setCopiedText] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<{ url: string; code?: string; desc?: string } | null>(null);
+
+  // Smart paste import states
+  const [rawImportText, setRawImportText] = useState('');
+  const [isParsingLocal, setIsParsingLocal] = useState(false);
+  const [parseSuccessMsg, setParseSuccessMsg] = useState<string | null>(null);
+  const [parseErrorMsg, setParseErrorMsg] = useState<string | null>(null);
+  const [showSmartPaste, setShowSmartPaste] = useState(true);
+  const [isDraggingAvatar, setIsDraggingAvatar] = useState(false);
 
   useEffect(() => {
     if (copiedText) {
@@ -79,6 +87,11 @@ export default function CustomerList() {
   }, []);
 
   const handleOpenModal = (customer?: Customer) => {
+    // Reset paste states on opening the modal
+    setRawImportText('');
+    setParseSuccessMsg(null);
+    setParseErrorMsg(null);
+
     if (customer) {
       setEditingCustomer(customer);
       setFormData({
@@ -126,11 +139,256 @@ export default function CustomerList() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingCustomer(null);
+    // Clear paste states
+    setRawImportText('');
+    setParseSuccessMsg(null);
+    setParseErrorMsg(null);
+  };
+
+  // Local Offline Smart Parser (Regular Expressions & Pattern Heuristics)
+  const handleLocalParse = () => {
+    if (!rawImportText.trim()) {
+      setParseErrorMsg('请先在上方输入框复制粘贴客户原始文本信息。');
+      return;
+    }
+    
+    setIsParsingLocal(true);
+    setParseErrorMsg(null);
+    setParseSuccessMsg(null);
+
+    try {
+      const text = rawImportText;
+      const result: any = {
+        name: '',
+        companyName: '',
+        email: '',
+        email2: '',
+        tel: '',
+        address: '',
+        country: '',
+        website: '',
+        linkedin: '',
+        facebook: '',
+        whatsapp: '',
+        alibaba: '',
+        productLink: '',
+        notes: ''
+      };
+
+      const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+
+      // 1. Double check for typical email matches
+      const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+      const foundEmails = text.match(emailRegex) || [];
+      if (foundEmails.length > 0) {
+        result.email = foundEmails[0].trim();
+        if (foundEmails.length > 1) {
+          result.email2 = foundEmails[1].trim();
+        }
+      }
+
+      // 2. Extract telephone & whatsapp numbers
+      const telRegex = /(?:\+|00)\d{1,4}[- ]?\d{3,4}[- ]?\d{4,12}|\b\d{3}[- ]?\d{3,4}[- ]?\d{4}\b/g;
+      const foundTels = text.match(telRegex) || [];
+      const validTels = foundTels.filter(t => t.replace(/[^0-9]/g, '').length >= 7);
+      if (validTels.length > 0) {
+        result.tel = validTels[0].trim();
+        result.whatsapp = validTels[0].replace(/[^0-9+]/g, '');
+      }
+
+      // 3. Extract Links dynamically
+      const urlRegex = /(https?:\/\/[^\s/$.?#].[^\s]*)/gi;
+      const foundUrls = text.match(urlRegex) || [];
+      foundUrls.forEach(url2 => {
+        const url = url2.trim();
+        const urlLower = url.toLowerCase();
+        if (urlLower.includes('linkedin.com')) {
+          result.linkedin = url;
+        } else if (urlLower.includes('facebook.com') || urlLower.includes('fb.com')) {
+          result.facebook = url;
+        } else if (urlLower.includes('alibaba.com') || urlLower.includes('1688.com')) {
+          result.alibaba = url;
+        } else if (urlLower.includes('whatsapp.com') || urlLower.includes('wa.me')) {
+          result.whatsapp = url;
+        } else if (urlLower.includes('product') || urlLower.includes('item') || urlLower.includes('detail') || urlLower.includes('goods')) {
+          result.productLink = url;
+        } else if (!result.website && !urlLower.includes('mail')) {
+          result.website = url;
+        }
+      });
+
+      // Simple common countries list for offline dictionary-based matching
+      const countriesList = [
+        'usa', 'united states', 'america', '美国', '美',
+        'uk', 'united kingdom', 'britain', '英国', '英',
+        'germany', 'deutschland', '德国', '德',
+        'france', '法国', '法',
+        'spain', 'spanien', '西班牙',
+        'italy', 'italia', '意大利',
+        'canada', '加拿大',
+        'australia', '澳大利亚', '澳洲',
+        'japan', '日本',
+        'korea', '韩国',
+        'singapore', '新加坡',
+        'india', '印度',
+        'russia', '俄罗斯',
+        'brazil', '巴西',
+        'mexico', '墨西哥',
+        'south africa', '南非',
+        'vietnam', '越南',
+        'thailand', '泰国',
+        'malaysia', '马来西亚',
+        'indonesia', '印尼', '印度尼西亚'
+      ];
+
+      // 4. Iterate lines to parse matching patterns
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        const lineLower = line.toLowerCase();
+
+        // A. Specific key-value prefixes
+        if (/(?:name|contact|contact person|联系人|姓名|客户姓名|客户|负责人|经办人)\s*[:：]\s*(.*)/i.test(line)) {
+          const m = line.match(/(?:name|contact|contact person|联系人|姓名|客户姓名|客户|负责人|经办人)\s*[:：]\s*(.*)/i);
+          if (m && m[1]) result.name = m[1].replace(/[,;"']/g, '').trim();
+        }
+        else if (/(?:company|company name|co\.|corp|corporation|firm|公司|公司名称|企业名称|商户|店铺|名)\s*[:：]\s*(.*)/i.test(line)) {
+          const m = line.match(/(?:company|company name|co\.|corp|corporation|firm|公司|公司名称|企业名称|商户|店铺|名)\s*[:：]\s*(.*)/i);
+          if (m && m[1]) result.companyName = m[1].replace(/[,;"']/g, '').trim();
+        }
+        else if (/(?:country|region|国家|国)\s*[:：]\s*(.*)/i.test(line)) {
+          const m = line.match(/(?:country|region|国家|国)\s*[:：]\s*(.*)/i);
+          if (m && m[1]) result.country = m[1].replace(/[,;"']/g, '').trim();
+        }
+        else if (/(?:address|add|location|地址|住址|收货地址|发货地址|厂址)\s*[:：]\s*(.*)/i.test(line)) {
+          const m = line.match(/(?:address|add|location|地址|住址|收货地址|发货地址|厂址)\s*[:：]\s*(.*)/i);
+          if (m && m[1]) result.address = m[1].trim();
+        }
+        else if (/(?:notes|note|remarks|remark|备注|说明|补充信息|谈判记录)\s*[:：]\s*(.*)/i.test(line)) {
+          const m = line.match(/(?:notes|note|remarks|remark|备注|说明|补充信息|谈判记录)\s*[:：]\s*(.*)/i);
+          if (m && m[1]) result.notes = m[1].trim();
+        }
+
+        // B. Non-prefix smart match strategies
+        // Extract company ends
+        if (!result.companyName && (
+          lineLower.endsWith(' co., ltd.') || 
+          lineLower.endsWith(' co.,ltd.') || 
+          lineLower.endsWith(' corp.') || 
+          lineLower.endsWith(' inc.') || 
+          lineLower.endsWith(' llc') || 
+          lineLower.endsWith(' limited') || 
+          lineLower.endsWith(' group') || 
+          line.endsWith('有限公司') || 
+          line.endsWith('有限责任公司') || 
+          line.endsWith('集团') || 
+          line.endsWith('制品厂') || 
+          line.endsWith('家居')
+        )) {
+          if (line.length < 50) {
+            result.companyName = line;
+          }
+        }
+
+        // Extract country from plain text
+        if (!result.country) {
+          for (const countryWord of countriesList) {
+            if (lineLower.includes(countryWord)) {
+              // Be careful not to match random substrings
+              const wordIdx = lineLower.indexOf(countryWord);
+              if (wordIdx !== -1) {
+                // Return capitalized country or Chinese form
+                result.country = countryWord.toUpperCase();
+                break;
+              }
+            }
+          }
+        }
+
+        // Extract potential address lines (contain street descriptors)
+        if (!result.address) {
+          if (/(?:street|st|road|rd|avenue|ave|drive|dr|building|bldg|floor|fl|room|rm|zone|district|city|province|state|地址|路|区|市|省|街)/i.test(lineLower)) {
+            if (line.length > 10 && line.length < 100 && !line.includes('@') && !line.includes('http') && !line.includes(':') && !line.includes('：')) {
+              result.address = line;
+            }
+          }
+        }
+      }
+
+      // 5. Normal line 1 fallback for Guest Name or Company Name if completely empty
+      if (!result.name && lines.length > 0) {
+        for (const line of lines) {
+          // If a line is short, doesn't contain links/emails or punctuation, grab it!
+          if (!line.includes('@') && !line.includes(':') && !line.includes('：') && !line.includes('http') && line.length > 2 && line.length < 25) {
+            // If it seems to be an English capitalized name e.g. "John Doe" or a simple Chinese name
+            if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$/.test(line) || /^[\u4e00-\u9fa5]{2,4}$/.test(line)) {
+              result.name = line;
+              break;
+            }
+          }
+        }
+      }
+
+      // 6. Last-resort fallback for Name
+      if (!result.name && lines.length > 0) {
+        const fallbackLine = lines[0];
+        if (fallbackLine && fallbackLine.length < 32 && !fallbackLine.includes('@') && !fallbackLine.includes('http')) {
+          result.name = fallbackLine;
+        }
+      }
+
+      // Overlay on formData
+      setFormData(prev => ({
+        ...prev,
+        name: result.name || prev.name || '未命名联系人',
+        companyName: result.companyName || prev.companyName,
+        email: result.email || prev.email,
+        email2: result.email2 || prev.email2,
+        tel: result.tel || prev.tel,
+        address: result.address || prev.address,
+        country: result.country || prev.country,
+        linkedin: result.linkedin || prev.linkedin,
+        facebook: result.facebook || prev.facebook,
+        whatsapp: result.whatsapp || prev.whatsapp,
+        alibaba: result.alibaba || prev.alibaba,
+        website: result.website || prev.website,
+        productLink: result.productLink || prev.productLink,
+        notes: result.notes || prev.notes || `[本地识别 - 原文参考]:\n${text.slice(0, 150)}`
+      }));
+
+      setParseSuccessMsg('⚡ 本地极速智能识别成功！已匹配提取关键信息（名字/邮箱/电话/网址），请您核对确认。');
+    } catch (err: any) {
+      setParseErrorMsg(`本地解析发生错误: ${err.message || err}`);
+    } finally {
+      setIsParsingLocal(false);
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      setFormData(prev => ({ ...prev, avatar: base64String }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAvatarDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingAvatar(true);
+  };
+
+  const handleAvatarDragLeave = () => {
+    setIsDraggingAvatar(false);
+  };
+
+  const handleAvatarDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingAvatar(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
 
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -393,19 +651,9 @@ export default function CustomerList() {
                   <div className="space-y-1.5 border-b border-outline-variant/10 pb-3">
                     <div className="flex items-center gap-2 text-xs text-on-surface-variant group/email">
                       <Mail size={12} className="flex-shrink-0 text-primary" />
-                      {customer.email ? (
-                        <a 
-                          href={`https://mail.zoho.com.cn/zm/#mail/compose/mailto:${customer.email}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-primary transition-colors truncate font-medium"
-                          title="Compose in Zoho Mail"
-                        >
-                          {customer.email}
-                        </a>
-                      ) : (
-                        <span className="text-on-surface-variant/40 italic">No email</span>
-                      )}
+                      <a href={`mailto:${customer.email}`} className="hover:text-primary transition-colors truncate font-medium">
+                        {customer.email || 'No email'}
+                      </a>
                       <div className="ml-auto flex items-center gap-1">
                         {customer.email && (
                           <>
@@ -420,21 +668,21 @@ export default function CustomerList() {
                               {copiedText === customer.email ? <Check size={10} className="text-success" /> : <Copy size={10} className="opacity-0 group-hover/email:opacity-100" />}
                             </button>
                             <a 
-                              href={`https://mail.zoho.com.cn/zm/#mail/compose/mailto:${customer.email}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                              href={`mailto:${customer.email}`}
                               className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
-                              title="Compose in Zoho Mail"
+                              title="Open in Local Mail Client (Zoho Desktop)"
                             >
                               <Send size={10} className="opacity-0 group-hover/email:opacity-100" />
                             </a>
-                            <button 
-                              onClick={() => window.open(`https://mail.zoho.com.cn/zm/#mail/compose/mailto:${customer.email}`, '_blank')}
-                              className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
-                              title="Compose in Zoho Mail"
+                            <a 
+                              href={`https://mail.zoho.com.cn/zm/#mail/compose?to=${encodeURIComponent(customer.email)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary inline-flex items-center justify-center"
+                              title="Compose in Zoho Mail (Web)"
                             >
                               <span className="text-[8px] font-bold opacity-0 group-hover/email:opacity-100">Zoho</span>
-                            </button>
+                            </a>
                           </>
                         )}
                       </div>
@@ -442,13 +690,7 @@ export default function CustomerList() {
                     {customer.email2 && (
                       <div className="flex items-center gap-2 text-xs text-on-surface-variant group/email2">
                         <Mail size={12} className="flex-shrink-0 text-primary opacity-60" />
-                        <a 
-                          href={`https://mail.zoho.com.cn/zm/#mail/compose/mailto:${customer.email2}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-primary transition-colors truncate italic"
-                          title="Compose in Zoho Mail"
-                        >
+                        <a href={`mailto:${customer.email2}`} className="hover:text-primary transition-colors truncate italic">
                           {customer.email2}
                         </a>
                         <div className="ml-auto flex items-center gap-1">
@@ -463,21 +705,21 @@ export default function CustomerList() {
                             {copiedText === customer.email2 ? <Check size={10} className="text-success" /> : <Copy size={10} className="opacity-0 group-hover/email2:opacity-100" />}
                           </button>
                           <a 
-                            href={`https://mail.zoho.com.cn/zm/#mail/compose/mailto:${customer.email2}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            href={`mailto:${customer.email2}`}
                             className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
-                            title="Compose in Zoho Mail"
+                            title="Open in Local Mail Client"
                           >
                             <Send size={10} className="opacity-0 group-hover/email2:opacity-100" />
                           </a>
-                          <button 
-                            onClick={() => window.open(`https://mail.zoho.com.cn/zm/#mail/compose/mailto:${customer.email2}`, '_blank')}
-                            className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary"
-                            title="Compose in Zoho Mail"
+                          <a 
+                            href={`https://mail.zoho.com.cn/zm/#mail/compose?to=${encodeURIComponent(customer.email2)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1 hover:bg-primary/10 rounded transition-colors text-on-surface-variant hover:text-primary inline-flex items-center justify-center"
+                            title="Compose in Zoho Mail (Web)"
                           >
                             <span className="text-[8px] font-bold opacity-0 group-hover/email2:opacity-100">Zoho</span>
-                          </button>
+                          </a>
                         </div>
                       </div>
                     )}
@@ -593,219 +835,313 @@ export default function CustomerList() {
       {/* Add/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-surface-container-lowest rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between p-6 border-b border-outline-variant/30">
-              <h2 className="text-xl font-headline font-bold text-primary">
-                {editingCustomer ? 'Edit Customer' : 'Add New Customer'}
-              </h2>
-              <button onClick={handleCloseModal} className="p-2 hover:bg-surface-container-low rounded-full transition-colors">
+          <div className={`bg-surface-container-lowest rounded-2xl w-full ${showSmartPaste ? 'max-w-4xl' : 'max-w-2xl'} shadow-2xl overflow-hidden transition-all duration-300`}>
+            <div className="flex items-center justify-between p-6 border-b border-outline-variant/30 bg-surface-container-low">
+              <div className="flex items-center gap-2">
+                <Users className="text-primary" size={24} />
+                <h2 className="text-xl font-headline font-bold text-primary">
+                  {editingCustomer ? 'Edit Customer' : 'Add New Customer'}
+                </h2>
+              </div>
+              <button onClick={handleCloseModal} className="p-2 hover:bg-surface-container-high rounded-full transition-colors font-bold cursor-pointer">
                 <X size={24} />
               </button>
             </div>
             
             <form onSubmit={handleSave}>
-              <div className="max-h-[80vh] overflow-y-auto p-6 flex flex-col gap-5">
-                <div className="flex items-center gap-6 mb-2">
-                  <div className="relative group">
-                    <div className="w-20 h-20 rounded-full overflow-hidden bg-surface-container-low border-2 border-dashed border-outline-variant group-hover:border-primary transition-colors flex items-center justify-center">
-                      {formData.avatar ? (
-                        <img src={formData.avatar} alt="Avatar Preview" className="w-full h-full object-cover" />
-                      ) : (
-                        <User size={32} className="text-on-surface-variant/30" />
+              <div className="max-h-[80vh] overflow-y-auto p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  
+                  {/* Left Column: Smart Copy-Paste Parser */}
+                  {showSmartPaste && (
+                    <div className="lg:col-span-5 bg-surface-container-low p-4 rounded-xl border border-outline-variant/30 flex flex-col gap-4 self-stretch">
+                      <div className="flex items-center justify-between border-b border-outline-variant/30 pb-2">
+                        <div className="flex items-center gap-1.5 text-primary font-bold text-sm">
+                          <Brain size={16} className="text-primary animate-pulse" />
+                          <span>极速智能粘贴导入</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowSmartPaste(false)}
+                          className="text-xs text-on-surface-variant hover:text-primary transition-colors hover:underline font-bold cursor-pointer"
+                        >
+                          隐藏面板
+                        </button>
+                      </div>
+                      
+                      <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                        直接从邮件签名、微信聊天记录、WhatsApp 等来源复制客户信息并黏贴在此。系统将自动拆分并实时填入右侧表单：
+                      </p>
+
+                      <div className="flex flex-col gap-1.5">
+                        <textarea
+                          value={rawImportText}
+                          onChange={(e) => setRawImportText(e.target.value)}
+                          placeholder="例如粘贴：&#10;姓名: John Doe&#10;公司: Acme Corp&#10;邮箱: john@acme.com&#10;手机: +1 (555) 0199&#10;网址: www.acme.com&#10;国家: USA&#10;或者粘贴任何零散信息..."
+                          className="w-full bg-surface-container-lowest p-3 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-xs h-[180px] font-sans resize-none placeholder-on-surface-variant/40"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-2.5">
+                        <button
+                          type="button"
+                          onClick={handleLocalParse}
+                          disabled={isParsingLocal}
+                          className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary-container text-on-primary hover:opacity-95 py-3 rounded-lg text-xs font-bold transition-all shadow-md hover:shadow-lg disabled:opacity-50 cursor-pointer text-center"
+                          title="在您的浏览器端秒级运行本地规则匹配，100% 本地安全免费，无需配置任何 API KEY 密钥！"
+                        >
+                          <Brain size={16} className="animate-pulse" />
+                          <span>⚡ 极速本地识别导入 (100% 免费安全) ⚡</span>
+                        </button>
+                      </div>
+
+                      {parseSuccessMsg && (
+                        <div className="bg-success-container/15 text-success text-xs p-2.5 rounded-lg border border-success/20 font-medium">
+                          {parseSuccessMsg}
+                        </div>
                       )}
+
+                      {parseErrorMsg && (
+                        <div className="bg-error-container/15 text-error text-xs p-2.5 rounded-lg border border-error/20 font-medium">
+                          {parseErrorMsg}
+                        </div>
+                      )}
+
+                      <div className="text-[10px] text-on-surface-variant leading-tight bg-surface-container-lowest p-2.5 rounded border border-outline-variant/10">
+                        <span className="font-bold">💡 导入解析说明：</span>
+                        <ul className="list-disc list-inside mt-1 space-y-1 opacity-85">
+                          <li><strong>100% 离线安全：</strong>所有内容均在浏览器本地分析提取，不发送到后端服务器，保护您的客户隐私。</li>
+                          <li><strong>自动识别字段：</strong>支持自然分析提取客户姓名、邮箱、电话、公司名称、国家、网址和产品链接。</li>
+                        </ul>
+                      </div>
                     </div>
-                    <label className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-full">
-                      <Camera size={20} />
-                      <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                    </label>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-on-surface">Customer Avatar</p>
-                    <p className="text-xs text-on-surface-variant mt-0.5">Click image to upload or change profile photo</p>
-                  </div>
-                </div>
+                  )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-on-surface-variant">Customer Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
-                      placeholder="e.g. John Doe"
-                    />
+                  {/* Right Column: Original Modal Content Form */}
+                  <div className={`${showSmartPaste ? 'lg:col-span-7' : 'lg:col-span-12'} flex flex-col gap-5 self-stretch`}>
+                    {!showSmartPaste && (
+                      <div className="flex justify-start mb-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowSmartPaste(true)}
+                          className="text-xs bg-primary/10 text-primary hover:bg-primary/20 px-3 py-1.5 rounded-md font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Brain size={12} />
+                          展开 ⚡极速智能粘贴导入 面板
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-4 mb-2 bg-surface-container-low/20 p-3 rounded-xl border border-outline-variant/10">
+                      <div 
+                        onDragOver={handleAvatarDragOver}
+                        onDragLeave={handleAvatarDragLeave}
+                        onDrop={handleAvatarDrop}
+                        className={`relative group flex-shrink-0 rounded-full transition-all ${isDraggingAvatar ? 'ring-4 ring-primary scale-105' : ''}`}
+                      >
+                        <div className={`w-16 h-16 rounded-full overflow-hidden bg-surface-container-low border-2 ${isDraggingAvatar ? 'border-primary' : 'border-dashed border-outline-variant'} group-hover:border-primary transition-colors flex items-center justify-center`}>
+                          {formData.avatar ? (
+                            <img src={formData.avatar} alt="Avatar Preview" className="w-full h-full object-cover" />
+                          ) : (
+                            <User size={28} className="text-on-surface-variant/30" />
+                          )}
+                        </div>
+                        <label className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-full">
+                          <Camera size={16} />
+                          <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                        </label>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-on-surface">客户头像 (Avatar)</p>
+                        <p className="text-xs text-on-surface-variant mt-0.5">支持拖拽图片至选框内，或点击直接上传</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3.5">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-on-surface-variant flex items-center gap-1">
+                          客户姓名 <span className="text-error">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          className="bg-surface-container-low px-3 py-1.5 rounded-lg outline-none border border-outline-variant/25 focus:border-primary transition-all text-sm"
+                          placeholder="例如 John Doe"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-on-surface-variant">公司名称</label>
+                        <input
+                          type="text"
+                          value={formData.companyName}
+                          onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                          className="bg-surface-container-low px-3 py-1.5 rounded-lg outline-none border border-outline-variant/25 focus:border-primary transition-all text-sm"
+                          placeholder="例如 Acme Corp"
+                        />
+                      </div>
+                      
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-on-surface-variant">主要邮箱</label>
+                        <input
+                          type="email"
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          className="bg-surface-container-low px-3 py-1.5 rounded-lg outline-none border border-outline-variant/25 focus:border-primary transition-all text-sm"
+                          placeholder="john@example.com"
+                        />
+                      </div>
+                      
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-on-surface-variant">备用邮箱</label>
+                        <input
+                          type="email"
+                          value={formData.email2}
+                          onChange={(e) => setFormData({ ...formData, email2: e.target.value })}
+                          className="bg-surface-container-low px-3 py-1.5 rounded-lg outline-none border border-outline-variant/25 focus:border-primary transition-all text-sm"
+                          placeholder="例如 backup@example.com"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-on-surface-variant">国别（国家）</label>
+                        <input
+                          type="text"
+                          value={formData.country}
+                          onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                          className="bg-surface-container-low px-3 py-1.5 rounded-lg outline-none border border-outline-variant/25 focus:border-primary transition-all text-sm"
+                          placeholder="例如 USA, 德国"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-on-surface-variant">联系电话 (Tel)</label>
+                        <input
+                          type="tel"
+                          value={formData.tel}
+                          onChange={(e) => setFormData({ ...formData, tel: e.target.value })}
+                          className="bg-surface-container-low px-3 py-1.5 rounded-lg outline-none border border-outline-variant/25 focus:border-primary transition-all text-sm"
+                          placeholder="+1 234 567 890"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-on-surface-variant">客户网址</label>
+                        <input
+                          type="text"
+                          value={formData.website}
+                          onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                          className="bg-surface-container-low px-3 py-1.5 rounded-lg outline-none border border-outline-variant/25 focus:border-primary transition-all text-sm"
+                          placeholder="www.example.com"
+                        />
+                      </div>
+                      
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-on-surface-variant">Alibaba 地址</label>
+                        <input
+                          type="text"
+                          value={formData.alibaba}
+                          onChange={(e) => setFormData({ ...formData, alibaba: e.target.value })}
+                          className="bg-surface-container-low px-3 py-1.5 rounded-lg outline-none border border-outline-variant/25 focus:border-primary transition-all text-sm"
+                          placeholder="阿里巴巴旺铺链接"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-on-surface-variant">LinkedIn 链接</label>
+                        <input
+                          type="text"
+                          value={formData.linkedin}
+                          onChange={(e) => setFormData({ ...formData, linkedin: e.target.value })}
+                          className="bg-surface-container-low px-3 py-1.5 rounded-lg outline-none border border-outline-variant/25 focus:border-primary transition-all text-sm"
+                          placeholder="领英主页"
+                        />
+                      </div>
+                      
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-on-surface-variant">Facebook 链接</label>
+                        <input
+                          type="text"
+                          value={formData.facebook}
+                          onChange={(e) => setFormData({ ...formData, facebook: e.target.value })}
+                          className="bg-surface-container-low px-3 py-1.5 rounded-lg outline-none border border-outline-variant/25 focus:border-primary transition-all text-sm"
+                          placeholder="FB 个人或社媒主页"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-on-surface-variant">WhatsApp 账号 / 链接</label>
+                        <input
+                          type="text"
+                          value={formData.whatsapp}
+                          onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
+                          className="bg-surface-container-low px-3 py-1.5 rounded-lg outline-none border border-outline-variant/25 focus:border-primary transition-all text-sm"
+                          placeholder="WhatsApp 号码"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-on-surface-variant">客户目标产品链接</label>
+                        <input
+                          type="text"
+                          value={formData.productLink}
+                          onChange={(e) => setFormData({ ...formData, productLink: e.target.value })}
+                          className="bg-surface-container-low px-3 py-1.5 rounded-lg outline-none border border-outline-variant/25 focus:border-primary transition-all text-sm"
+                          placeholder="询盘商品页链接"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1 md:col-span-2">
+                        <label className="text-xs font-bold text-on-surface-variant">本地资源文件夹文件夹路径</label>
+                        <input
+                          type="text"
+                          value={formData.localPath}
+                          onChange={(e) => setFormData({ ...formData, localPath: e.target.value })}
+                          className="bg-surface-container-low px-3 py-1.5 rounded-lg outline-none border border-outline-variant/25 focus:border-primary transition-all text-sm w-full"
+                          placeholder="/Users/Name/Documents/ClientA"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-bold text-on-surface-variant">详细收货/联系地址</label>
+                      <textarea
+                        value={formData.address}
+                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                        className="bg-surface-container-low px-3 py-1.5 rounded-lg outline-none border border-outline-variant/25 focus:border-primary transition-all min-h-[50px] text-sm"
+                        placeholder="公司实体办公或者收货地址"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-bold text-on-surface-variant">客户备注 & 谈判备忘 (Notes)</label>
+                      <textarea
+                        value={formData.notes}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                        className="bg-surface-container-low px-3 py-1.5 rounded-lg outline-none border border-outline-variant/25 focus:border-primary transition-all min-h-[50px] text-sm"
+                        placeholder="日常习惯、付款条件偏好等..."
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-3 mt-2 border-t border-outline-variant/20 pt-4 bg-surface-container-low/20 p-3 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={handleCloseModal}
+                        className="px-6 py-2 rounded-lg font-medium hover:bg-surface-container-high hover:text-on-surface text-on-surface-variant text-sm transition-colors cursor-pointer"
+                      >
+                        取消关闭
+                      </button>
+                      <button
+                        type="submit"
+                        className="bg-primary text-on-primary px-8 py-2 rounded-lg font-medium hover:bg-primary/90 transition-colors shadow-sm text-sm cursor-pointer"
+                      >
+                        {editingCustomer ? '更新记录' : '保存入库'}
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-on-surface-variant">Company Name</label>
-                    <input
-                      type="text"
-                      value={formData.companyName}
-                      onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
-                      placeholder="e.g. Acme Corp"
-                    />
-                  </div>
-                  
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-on-surface-variant">Primary Email</label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
-                      placeholder="john@example.com"
-                    />
-                  </div>
-                  
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-on-surface-variant">Secondary Email</label>
-                    <input
-                      type="email"
-                      value={formData.email2}
-                      onChange={(e) => setFormData({ ...formData, email2: e.target.value })}
-                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
-                      placeholder="Backup email"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-on-surface-variant">Country</label>
-                    <input
-                      type="text"
-                      value={formData.country}
-                      onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
-                      placeholder="e.g. USA"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-on-surface-variant">Telephone</label>
-                    <input
-                      type="tel"
-                      value={formData.tel}
-                      onChange={(e) => setFormData({ ...formData, tel: e.target.value })}
-                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
-                      placeholder="+1 234 567 890"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-on-surface-variant">Website</label>
-                    <input
-                      type="text"
-                      value={formData.website}
-                      onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
-                      placeholder="www.example.com"
-                    />
-                  </div>
-                  
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-on-surface-variant">Alibaba</label>
-                    <input
-                      type="text"
-                      value={formData.alibaba}
-                      onChange={(e) => setFormData({ ...formData, alibaba: e.target.value })}
-                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
-                      placeholder="Profile URL"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-on-surface-variant">LinkedIn</label>
-                    <input
-                      type="text"
-                      value={formData.linkedin}
-                      onChange={(e) => setFormData({ ...formData, linkedin: e.target.value })}
-                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
-                      placeholder="Profile URL"
-                    />
-                  </div>
-                  
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-on-surface-variant">Facebook</label>
-                    <input
-                      type="text"
-                      value={formData.facebook}
-                      onChange={(e) => setFormData({ ...formData, facebook: e.target.value })}
-                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
-                      placeholder="Profile URL"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-on-surface-variant">WhatsApp</label>
-                    <input
-                      type="text"
-                      value={formData.whatsapp}
-                      onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
-                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
-                      placeholder="Number or Link"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-on-surface-variant">Request Product Link</label>
-                    <input
-                      type="text"
-                      value={formData.productLink}
-                      onChange={(e) => setFormData({ ...formData, productLink: e.target.value })}
-                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm"
-                      placeholder="Product URL"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5 md:col-span-2">
-                    <label className="text-sm font-medium text-on-surface-variant">Local Folder Path</label>
-                    <input
-                      type="text"
-                      value={formData.localPath}
-                      onChange={(e) => setFormData({ ...formData, localPath: e.target.value })}
-                      className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all text-sm w-full"
-                      placeholder="/Users/Name/Documents/ClientA"
-                    />
-                  </div>
-                </div>
-                
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-on-surface-variant">Address</label>
-                  <textarea
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all min-h-[60px] text-sm"
-                    placeholder="Physical address"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-on-surface-variant">Notes & Remarks</label>
-                  <textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    className="bg-surface-container-low px-3 py-2 rounded-lg outline-none border border-outline-variant/30 focus:border-primary transition-all min-h-[60px] text-sm"
-                    placeholder="Internal notes..."
-                  />
-                </div>
-
-
-                <div className="flex justify-end gap-3 mt-4">
-                  <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    className="px-6 py-2 rounded-lg font-medium hover:bg-surface-container-low transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="bg-primary text-on-primary px-8 py-2 rounded-lg font-medium hover:bg-primary/90 transition-colors shadow-sm"
-                  >
-                    {editingCustomer ? 'Update' : 'Save'}
-                  </button>
                 </div>
               </div>
             </form>

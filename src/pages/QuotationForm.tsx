@@ -614,6 +614,26 @@ export default function QuotationForm() {
     }
   };
 
+  const handleImageFileDrop = (id: number, file: File, index: number) => {
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const compressedDataUrl = await compressBase64Image(reader.result as string);
+        
+        // Check if this image is already in the current quotation
+        const isDuplicateInQuotation = items.some((item, idx) => item.image === compressedDataUrl && idx !== index);
+        if (isDuplicateInQuotation) {
+          alert("This product is already in the quotation. Please update the quantity of the existing item instead.");
+          return;
+        }
+
+        updateProduct(id, 'image', compressedDataUrl);
+        matchFromLibrary(compressedDataUrl, index);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const removeProduct = (id: number) => {
     setItems(items.filter(item => item.id !== id));
   };
@@ -820,7 +840,18 @@ export default function QuotationForm() {
                   <div key={product.id} className="flex border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors group min-h-[120px] px-2 py-2 gap-2 relative">
                     
                     <div className="w-[65px] shrink-0 flex flex-col items-center justify-center gap-2">
-                      <div className="w-20 h-20 bg-secondary-container rounded flex items-center justify-center cursor-pointer hover:bg-primary-container transition-colors relative overflow-hidden group/upload">
+                      <div 
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const file = e.dataTransfer.files?.[0];
+                          if (file && file.type.startsWith('image/')) {
+                            handleImageFileDrop(product.id, file, items.indexOf(product));
+                          }
+                        }}
+                        className="w-20 h-20 bg-secondary-container rounded flex items-center justify-center cursor-pointer hover:bg-primary-container transition-colors relative overflow-hidden group/upload"
+                        title="Drag and drop or click to upload"
+                      >
                         {product.image ? (
                           <img src={product.image} alt="Product" className="w-full h-full object-contain" />
                         ) : (

@@ -21,6 +21,7 @@ export default function ProductList() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [exchangeRate, setExchangeRate] = useState<number>(6.8);
   const location = useLocation();
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -138,6 +139,29 @@ export default function ProductList() {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const compressed = await compressBase64Image(reader.result as string);
+        setFormData(prev => ({ ...prev, image: compressed }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleImageDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingImage(true);
+  };
+
+  const handleImageDragLeave = () => {
+    setIsDraggingImage(false);
+  };
+
+  const handleImageDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingImage(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onloadend = async () => {
         const compressed = await compressBase64Image(reader.result as string);
@@ -462,22 +486,37 @@ export default function ProductList() {
                   <div className="flex flex-col gap-4">
                     <div className="flex flex-col gap-2">
                       <label className="text-sm font-medium text-on-surface-variant">Product Image</label>
-                      <div className="relative h-48 bg-surface-container-low rounded-xl border-2 border-dashed border-outline-variant/30 flex items-center justify-center overflow-hidden group">
+                      <div 
+                        onDragOver={handleImageDragOver}
+                        onDragLeave={handleImageDragLeave}
+                        onDrop={handleImageDrop}
+                        className={`relative h-48 rounded-xl border-2 transition-all flex items-center justify-center overflow-hidden group ${
+                          isDraggingImage 
+                            ? 'border-primary bg-primary/5 ring-4 ring-primary/10 scale-[1.01]' 
+                            : 'border-dashed border-outline-variant/30 bg-surface-container-low'
+                        }`}
+                      >
                         {formData.image ? (
                           <>
                             <img src={formData.image} alt="Preview" className="w-full h-full object-contain" />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
                               <label className="cursor-pointer bg-surface-container-lowest text-primary px-4 py-2 rounded-lg font-medium flex items-center gap-2">
                                 <Upload size={18} />
-                                Change
+                                Change Image
                                 <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                               </label>
+                              <span className="text-[10px] text-white/75">Supports drag & drop</span>
                             </div>
                           </>
                         ) : (
-                          <label className="cursor-pointer flex flex-col items-center gap-2 text-on-surface-variant hover:text-primary transition-colors">
-                            <Upload size={32} />
-                            <span className="font-medium">Upload Image</span>
+                          <label className="cursor-pointer flex flex-col items-center gap-2 text-on-surface-variant hover:text-primary transition-colors text-center p-4 w-full h-full justify-center">
+                            <Upload size={32} className={isDraggingImage ? 'animate-bounce text-primary' : ''} />
+                            <span className="font-semibold text-sm">
+                              {isDraggingImage ? 'Drop to Upload Image!' : 'Upload Product Image'}
+                            </span>
+                            <span className="text-[11px] opacity-70">
+                              Drag and drop your file here, or click to browse
+                            </span>
                             <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                           </label>
                         )}
